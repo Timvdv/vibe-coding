@@ -61,5 +61,11 @@
   },
   "dependencies": {
     "xmldom": "^0.6.0"
-  }
+  },
+  "publisher": "TimvandeVathorst",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Timvdv/xml-to-code"
+  },
+  "keywords": ["XML to code", "RepoPrompt", "LLM parser"]
 }
