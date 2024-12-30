@@ -11,7 +11,9 @@
   ],
   "activationEvents": [
     "onView:xmlToCodeView",
-    "onCommand:xmlToCode.openView"
+    "onCommand:xmlToCode.openView",
+    "onCommand:xmlToCode.previewChanges",
+    "onCommand:xmlToCode.viewDiff"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -37,6 +39,10 @@
       {
         "command": "xmlToCode.openView",
         "title": "Open XML to Code View"
+      },
+      {
+        "command": "xmlToCode.viewDiff",
+        "title": "View Diff"
       }
     ]
   },

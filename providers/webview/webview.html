@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>XML to Code</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">
+    /* Reset some default styles */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body {
+        height: 100%;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        display: flex;
+        flex-direction: column;
+    }
+
+    body {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    h2 {
+        margin-bottom: 10px;
+        font-size: 1.5em;
+        color: var(--vscode-button-foreground);
+    }
+
+    p.description {
+        margin-bottom: 20px;
+        font-size: 0.9em; /* Reduced font size */
+        color: var(--vscode-editor-foreground);
+    }
+
+    textarea {
+        width: 100%;
+        flex: 1; /* Allows the textarea to grow */
+        padding: 15px;
+        font-size: 14px;
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        resize: vertical;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        margin-bottom: 20px; /* Space between textarea and button */
+    }
+
+    .button-container {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 20px;
+    }
+
+    button {
+        padding: 10px 25px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        margin-bottom: 10px; /* Space between buttons */
+    }
+
+    button:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    .changes-container {
+        margin-top: 20px;
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .file-list {
+        list-style-type: none;
+    }
+
+    .file-item {
+        padding: 15px;
+        margin-bottom: 10px;
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .file-item:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    .file-path {
+        font-size: 0.8em;
+        color: var(--vscode-editorWidget-border);
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    .file-description {
+        margin-top: 5px; /* Space below the file path */
+        font-size: 1em;
+        color: var(--vscode-editor-foreground);
+    }
+
+    footer {
+        padding-top: 20px;
+        border-top: 1px solid var(--vscode-editorWidget-border);
+        text-align: center;
+        font-size: 0.85em;
+        color: var(--vscode-editor-foreground);
+        margin-top: auto; /* Pushes the footer to the bottom */
+    }
+
+    footer a {
+        color: var(--vscode-button-foreground);
+        text-decoration: none;
+        margin: 0 5px;
+    }
+
+    footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* New Styles for Success Message */
+    #successMessage {
+        margin-top: 10px;
+        color: green;
+        display: none; /* Hidden by default */
+    }
+
+    /* Explicitly hide the "Apply Changes" button initially */
+    #applyChanges {
+        display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <h2>Paste your XML</h2>
+  <p class="description">These should be the XML changes that are the output from the LLM that you're using. Formatted like <a href="https://repoprompt.com" target="_blank">this</a></p>
+
+  <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
+
+  <div class="button-container">
+    <button id="prepareChanges">Prepare Changes</button>
+    <button id="applyChanges" style="display: none;">Apply Changes</button>
+  </div>
+
+  <div class="changes-container" id="changesContainer">
+    <!-- Pending changes will be displayed here -->
+  </div>
+
+  <div id="statusMessage" style="margin-top: 10px; color: red;"></div>
+  <div id="successMessage">Changes have been successfully applied.</div>
+
+  <footer>
+        made to use together with:
+    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a> <br /> <small>
+        use the XML Whole prompt</small>
+
+    <br /><br />
+
+    Extension is made with ❤️ by Tim van de Vathorst -
+    <a href="https://github.com/timvdvathorst" target="_blank">GitHub</a> |
+    <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
+  </footer>
+
+  <script nonce="${nonce}">
+    // File: embedded webview.js
+
+    (function () {
+        console.log("Embedded webview.js has been loaded.");
+
+        // Acquire the VS Code API
+        const vscode = acquireVsCodeApi();
+
+        // Get references to DOM elements
+        const prepareChangesButton = document.getElementById('prepareChanges');
+        const applyChangesButton = document.getElementById('applyChanges');
+        const xmlInput = document.getElementById('xmlInput');
+        const changesContainer = document.getElementById('changesContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        const successMessage = document.getElementById('successMessage');
+
+        // Ensure the "Apply Changes" button is hidden on initial load
+        applyChangesButton.style.display = 'none';
+
+        // Event listener for "Prepare Changes" button
+        prepareChangesButton.addEventListener('click', () => {
+            const xml = xmlInput.value.trim();
+            if (!xml) {
+                statusMessage.textContent = "Please enter XML input.";
+                statusMessage.style.color = "red";
+                return;
+            }
+            statusMessage.textContent = "";
+            vscode.postMessage({
+                command: 'applyXml',
+                payload: xml
+            });
+            console.log("Sent 'applyXml' message to extension.");
+        });
+
+        // Event listener for "Apply Changes" button
+        applyChangesButton.addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'confirmApply'
+            });
+            console.log("Sent 'confirmApply' message to extension.");
+        });
+
+        // Listen for messages from the extension
+        window.addEventListener('message', event => {
+            const message = event.data; // The JSON data our extension sent
+            console.log("Received message from extension:", message);
+            switch (message.command) {
+                case 'displayChanges':
+                    displayChanges(message.payload);
+                    applyChangesButton.style.display = 'block';
+                    successMessage.style.display = 'none';
+                    break;
+                case 'changesApplied':
+                    successMessage.style.display = 'block';
+                    applyChangesButton.style.display = 'none';
+                    // Reset the UI after 2 seconds
+                    setTimeout(() => {
+                        resetUI();
+                    }, 2000);
+                    break;
+                default:
+                    console.warn("Unknown command:", message.command);
+            }
+        });
+
+        // Function to display pending changes
+        function displayChanges(changes) {
+            changesContainer.innerHTML = ''; // Clear previous changes
+            if (changes.length === 0) {
+                changesContainer.textContent = "No changes to display.";
+                return;
+            }
+
+            const list = document.createElement('ul');
+            list.className = 'file-list';
+            changes.forEach((change, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'file-item';
+
+                // Create file path element
+                const filePath = document.createElement('div');
+                filePath.className = 'file-path';
+                filePath.textContent = `${change.filePath}`;
+
+                // Create description element
+                const description = document.createElement('div');
+                description.className = 'file-description';
+                description.textContent = `${change.action.toUpperCase()}: ${change.description}`;
+
+                listItem.appendChild(filePath);
+                listItem.appendChild(description);
+
+                listItem.addEventListener('click', () => {
+                    vscode.postMessage({
+                        command: 'viewDiff',
+                        payload: { index }
+                    });
+                });
+                list.appendChild(listItem);
+            });
+            changesContainer.appendChild(list);
+        }
+
+        // Function to reset the UI
+        function resetUI() {
+            xmlInput.value = '';
+            changesContainer.innerHTML = '';
+            applyChangesButton.style.display = 'none';
+            successMessage.style.display = 'none';
+            statusMessage.textContent = "Changes have been added successfully and the UI has been reset.";
+            statusMessage.style.color = "green";
+        }
+    })();
+  </script>
+</body>
+</html>

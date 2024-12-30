@@ -1,65 +1,127 @@
-# xml-to-code README
+# xml-to-code
 
-This is the README for your extension "xml-to-code". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+**xml-to-code** is a Visual Studio Code extension that transforms XML-based instructions into actionable code changes, streamlining your development workflow by bridging the gap between XML configurations and code implementations.
 
 ---
 
-## Working with Markdown
+## Features
 
-You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
+- **XML Parsing:** Easily input XML instructions and parse them into structured code modifications.
+- **Webview Interface:** Intuitive UI within VS Code for managing and applying code changes.
+- **Diff Viewer:** Preview differences before applying changes to ensure accuracy.
+- **Automated File Handling:** Create or rewrite files based on XML instructions seamlessly.
+- **Extensible Architecture:** Easily extend the extension to support additional functionalities.
+- **Testing Suite:** Comprehensive tests to ensure reliability and stability of the extension.
+- **Linting and Code Quality:** Integrated ESLint configuration to maintain code standards.
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets
+---
 
-## For more information
+## Installation
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/timvdvathorst/xml-to-code.git
+   ```
 
-**Enjoy!**
+2. **Navigate to the Extension Directory:**
+   ```bash
+   cd xml-to-code
+   ```
+
+3. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
+
+4. **Open in VS Code:**
+   ```bash
+   code .
+   ```
+
+5. **Launch the Extension:**
+   Press `F5` to open a new VS Code window with the extension loaded.
+
+---
+
+## Usage
+
+1. **Open XML to Code View:**
+   - Click on the **XML to Code** icon in the activity bar.
+   - Alternatively, use the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and execute `Open XML to Code View`.
+
+2. **Input XML Instructions:**
+   - Paste your XML-formatted instructions into the provided textarea.
+   - Ensure the XML follows the required schema for accurate parsing.
+
+3. **Prepare Changes:**
+   - Click the **Prepare Changes** button to parse the XML and generate a list of pending code changes.
+
+4. **Review Changes:**
+   - Review the list of changes in the **Changes** section.
+   - Click on individual changes to view diffs and ensure they meet your requirements.
+
+5. **Apply Changes:**
+   - Once satisfied, click the **Apply Changes** button to execute the modifications in your workspace.
+
+---
+
+## Example
+
+```xml
+<file path="src/components/MyComponent.js" action="rewrite">
+  <change>
+    <description>Add new state management logic to MyComponent</description>
+    <content>
+===
+import React, { useState } from 'react';
+
+const MyComponent = () => {
+  const [state, setState] = useState(null);
+
+  // New state management logic
+  const updateState = (newState) => {
+    setState(newState);
+  };
+
+  return (
+    <div>
+      {/* Component JSX */}
+    </div>
+  );
+};
+
+export default MyComponent;
+===
+    </content>
+  </change>
+</file>
+```
+
+---
+
+## Testing
+
+Run the test suite to ensure the extension functions as expected:
+
+```bash
+npm test
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+---
+
+## Acknowledgements
+
+- Inspired by the need to streamline XML-based configurations into actionable code.
+- Built with ❤️ by Tim van de Vathorst.
