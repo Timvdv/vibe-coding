@@ -28,39 +28,85 @@
         height: 100%;
     }
 
-    h2 {
+    /************************************************************
+     * Collapsible Input Section
+     ************************************************************/
+    .collapsible-section {
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        overflow: hidden;
+        /* Ensures the input section doesn't push the fixed button */
+        margin-bottom: 20px;
+    }
+    /* Hidden (collapsed) state */
+    .collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+    /* Visible (expanded) state */
+    .expanded {
+        max-height: 500px; /* Adjust as needed */
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* The button that toggles the collapsible input (initially hidden) */
+    #toggleInputBtn {
+        display: none; /* Hidden by default, shown after changes are displayed */
+        padding: 5px 10px;
+        font-size: 0.9em;
         margin-bottom: 10px;
-        font-size: 1.5em;
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        color: var(--vscode-button-foreground);
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #toggleInputBtn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Heading & Description
+     ************************************************************/
+    h2 {
+        margin-bottom: 6px;
+        font-size: 1.3em;
         color: var(--vscode-button-foreground);
     }
 
     p.description {
-        margin-bottom: 20px;
-        font-size: 0.9em; /* Reduced font size */
+        margin-bottom: 12px;
+        font-size: 0.85em;
         color: var(--vscode-editor-foreground);
     }
 
+    /************************************************************
+     * Textarea & Buttons
+     ************************************************************/
     textarea {
         width: 100%;
-        flex: 1; /* Allows the textarea to grow */
-        padding: 15px;
-        font-size: 14px;
+        flex: 1;
+        padding: 10px;
+        font-size: 13px;
         border: 1px solid var(--vscode-editorWidget-border);
         border-radius: 4px;
         resize: vertical;
         background-color: var(--vscode-editor-background);
         color: var(--vscode-editor-foreground);
-        margin-bottom: 20px; /* Space between textarea and button */
+        margin-bottom: 12px;
     }
 
     .button-container {
         display: flex;
-        flex-direction: column;
-        margin-bottom: 20px;
+        gap: 10px;
+        margin-bottom: 10px;
     }
 
     button {
-        padding: 10px 25px;
+        padding: 8px 20px;
         font-size: 14px;
         color: var(--vscode-button-foreground);
         background-color: var(--vscode-button-background);
@@ -68,17 +114,19 @@
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.3s ease;
-        margin-bottom: 10px; /* Space between buttons */
     }
 
     button:hover {
         background-color: var(--vscode-button-hoverBackground);
     }
 
+    /************************************************************
+     * Changes Container (the bottom list)
+     ************************************************************/
     .changes-container {
-        margin-top: 20px;
         flex: 1;
         overflow-y: auto;
+        margin-bottom: 60px; /* Space for the fixed button */
     }
 
     .file-list {
@@ -86,8 +134,8 @@
     }
 
     .file-item {
-        padding: 15px;
-        margin-bottom: 10px;
+        padding: 8px;
+        margin-bottom: 5px;
         background-color: var(--vscode-editor-background);
         border: 1px solid var(--vscode-editorWidget-border);
         border-radius: 4px;
@@ -102,26 +150,129 @@
         background-color: var(--vscode-button-hoverBackground);
     }
 
+    /* Highlight DELETE actions */
+    .delete-item {
+        background-color: rgba(255, 0, 0, 0.1); /* light red */
+        border: 1px solid rgba(255, 0, 0, 0.3);
+    }
+
     .file-path {
         font-size: 0.8em;
         color: var(--vscode-editorWidget-border);
-        width: 100%;
-        margin-bottom: 0;
+        margin-bottom: 2px;
     }
 
     .file-description {
-        margin-top: 5px; /* Space below the file path */
-        font-size: 1em;
+        font-size: 0.95em;
         color: var(--vscode-editor-foreground);
     }
 
+    .change-checkbox {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        transform: scale(1.2);
+        cursor: pointer;
+    }
+
+    /************************************************************
+     * Fixed Apply Changes Button
+     ************************************************************/
+    .fixed-button-container {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--vscode-editor-background);
+        padding-top: 10px;
+        padding-bottom: 10px;
+        /* Removed the border-top line to have a cleaner look */
+    }
+
+    .fixed-button-container .button-container {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    /* Hide the Apply Changes button initially */
+    .fixed-button-container {
+        display: none;
+    }
+
+    /* Apply Changes Button Styling */
+    #applyChanges {
+        padding: 10px 20px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #applyChanges:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Notification Styles
+     ************************************************************/
+    .notification {
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        font-size: 0.9em;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .notification.success {
+        background-color: #e6f4ea; /* Light green background */
+        border: 1px solid #a3d8a4; /* Green border */
+        color: #2e7d32; /* Dark green text */
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .notification .icon {
+        margin-right: 10px;
+        font-size: 1.2em;
+    }
+
+    .notification .message {
+        flex: 1;
+    }
+
+    /* Optional: Animation for Success Message */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /************************************************************
+     * Status & Footer
+     ************************************************************/
+    #statusMessage {
+        margin-top: 5px;
+        color: red;
+    }
+
+    #successMessage.visible {
+        display: flex; /* Flex to align icon and message */
+    }
+
+    #successMessage {
+        display: none; /* Hidden by default */
+    }
+
     footer {
-        padding-top: 20px;
+        padding-top: 15px;
+        /* previously had border-top, but let's keep it only for the footer if we want it here */
         border-top: 1px solid var(--vscode-editorWidget-border);
         text-align: center;
-        font-size: 0.85em;
+        font-size: 0.75em;
         color: var(--vscode-editor-foreground);
-        margin-top: auto; /* Pushes the footer to the bottom */
+        margin-top: auto;
     }
 
     footer a {
@@ -133,44 +284,51 @@
     footer a:hover {
         text-decoration: underline;
     }
-
-    /* New Styles for Success Message */
-    #successMessage {
-        margin-top: 10px;
-        color: green;
-        display: none; /* Hidden by default */
-    }
-
-    #applyChanges {
-        display: none;
-    }
   </style>
 </head>
 <body>
-  <h2>Paste your XML</h2>
-  <p class="description">These should be the XML changes that are the output from the LLM that you're using. Formatted like <a href="https://repoprompt.com" target="_blank">this</a></p>
+  <!-- Collapsible container for the input area (starts expanded) -->
+  <div id="inputSection" class="collapsible-section expanded">
+    <h2>Paste your XML</h2>
+    <p class="description">
+      These should be the XML changes that are the output from the LLM that you're using.
+      Formatted like <a href="https://repoprompt.com" target="_blank">this</a>
+    </p>
 
-  <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
+    <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
 
-  <div class="button-container">
-    <button id="prepareChanges">Prepare Changes</button>
-    <button id="applyChanges" style="display: none;">Apply Changes</button>
+    <div class="button-container">
+      <button id="prepareChanges">Prepare Changes</button>
+    </div>
+
+    <div id="statusMessage"></div>
   </div>
 
-  <div class="changes-container" id="changesContainer">
-    <!-- Pending changes will be displayed here -->
+  <!-- Button to show/hide the input section (initially hidden) -->
+  <button id="toggleInputBtn">Show XML</button>
+
+  <!-- Changes Container -->
+  <div class="changes-container" id="changesContainer"></div>
+
+  <!-- Updated Success Message -->
+  <div id="successMessage" class="notification success">
+    <span class="icon">✔️</span>
+    <span class="message">Changes have been successfully applied.</span>
   </div>
 
-  <div id="statusMessage" style="margin-top: 10px; color: red;"></div>
-  <div id="successMessage">Changes have been successfully applied.</div>
+  <!-- Fixed Apply Changes Button -->
+  <div class="fixed-button-container">
+    <div class="button-container">
+      <button id="applyChanges">Apply Changes</button>
+    </div>
+  </div>
 
   <footer>
-        made to use together with:
-    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a> <br /> <small>
-        use the XML Whole prompt</small>
+    made to use together with:
+    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a>
+    <br /> <small>use the XML Whole prompt</small>
 
     <br /><br />
-
     Extension is made with ❤️ by Tim van de Vathorst -
     <a href="https://github.com/timvdvathorst" target="_blank">GitHub</a> |
     <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
@@ -185,6 +343,9 @@
         // Acquire the VS Code API
         const vscode = acquireVsCodeApi();
 
+        // Keep track of the changes in a global array so we can handle checkboxes
+        let globalChanges = [];
+
         // Get references to DOM elements
         const prepareChangesButton = document.getElementById('prepareChanges');
         const applyChangesButton = document.getElementById('applyChanges');
@@ -192,11 +353,17 @@
         const changesContainer = document.getElementById('changesContainer');
         const statusMessage = document.getElementById('statusMessage');
         const successMessage = document.getElementById('successMessage');
+        const fixedButtonContainer = document.querySelector('.fixed-button-container');
 
-        // Ensure the "Apply Changes" button is hidden on initial load
-        applyChangesButton.style.display = 'none';
+        // Collapsible input section and toggle button
+        const inputSection = document.getElementById('inputSection');
+        const toggleInputBtn = document.getElementById('toggleInputBtn');
+        let inputCollapsed = false;
 
-        // Event listener for "Prepare Changes" button
+        // Ensure "Apply Changes" button is hidden on initial load
+        fixedButtonContainer.style.display = 'none';
+
+        // When user clicks "Prepare Changes"
         prepareChangesButton.addEventListener('click', () => {
             const xml = xmlInput.value.trim();
             if (!xml) {
@@ -212,40 +379,90 @@
             console.log("Sent 'applyXml' message to extension.");
         });
 
-        // Event listener for "Apply Changes" button
+        // When user clicks "Apply Changes"
         applyChangesButton.addEventListener('click', () => {
+            // Collect the indices of changes that are still selected
+            const selectedIndexes = globalChanges
+                .filter(change => change.selected)
+                .map(change => change.index);
+
             vscode.postMessage({
-                command: 'confirmApply'
+                command: 'confirmApply',
+                payload: { selectedIndexes }
             });
-            console.log("Sent 'confirmApply' message to extension.");
+            console.log("Sent 'confirmApply' message to extension with selectedIndexes:", selectedIndexes);
+        });
+
+        // Toggle button to show/hide the XML input area
+        toggleInputBtn.addEventListener('click', () => {
+            inputCollapsed = !inputCollapsed;
+            if (inputCollapsed) {
+                // Collapse
+                inputSection.classList.remove('expanded');
+                inputSection.classList.add('collapsed');
+                toggleInputBtn.textContent = 'Show XML';
+            } else {
+                // Expand
+                inputSection.classList.remove('collapsed');
+                inputSection.classList.add('expanded');
+                toggleInputBtn.textContent = 'Hide XML';
+            }
         });
 
         // Listen for messages from the extension
         window.addEventListener('message', event => {
-            const message = event.data; // The JSON data our extension sent
+            const message = event.data;
             console.log("Received message from extension:", message);
             switch (message.command) {
                 case 'displayChanges':
                     displayChanges(message.payload);
-                    applyChangesButton.style.display = 'block';
                     successMessage.style.display = 'none';
+                    // Show the fixed Apply Changes button only if there's at least one change
+                    if (message.payload.length > 0) {
+                        fixedButtonContainer.style.display = 'block';
+                    } else {
+                        fixedButtonContainer.style.display = 'none';
+                    }
+                    // Automatically collapse the input section when changes are displayed
+                    if (message.payload.length > 0) {
+                      inputSection.classList.remove('expanded');
+                      inputSection.classList.add('collapsed');
+                      inputCollapsed = true;
+                      toggleInputBtn.style.display = 'inline-block'; // Show the toggle button
+                      toggleInputBtn.textContent = 'Show XML'; // Because we've just collapsed it
+                    }
                     break;
+
                 case 'changesApplied':
-                    successMessage.style.display = 'block';
-                    applyChangesButton.style.display = 'none';
-                    // Reset the UI after 2 seconds
-                    setTimeout(() => {
-                        resetUI();
-                    }, 2000);
+                    successMessage.classList.add('visible');
+                    fixedButtonContainer.style.display = 'none';
+                    clearChanges();
+
+                    // Expand the input section again
+                    inputSection.classList.remove('collapsed');
+                    inputSection.classList.add('expanded');
+                    // Hide toggle button (reset state)
+                    toggleInputBtn.style.display = 'none';
+                    // Clear the text field
+                    xmlInput.value = "";
+                    inputCollapsed = false;
                     break;
+
+                case 'clearChanges':
+                    clearChanges();
+                    fixedButtonContainer.style.display = 'none';
+                    break;
+
                 default:
                     console.warn("Unknown command:", message.command);
             }
         });
 
-        // Function to display pending changes
+        // Display pending changes in the UI
         function displayChanges(changes) {
             changesContainer.innerHTML = ''; // Clear previous changes
+            globalChanges = []; // Reset the global array
+
             if (changes.length === 0) {
                 changesContainer.textContent = "No changes to display.";
                 return;
@@ -253,42 +470,69 @@
 
             const list = document.createElement('ul');
             list.className = 'file-list';
+
             changes.forEach((change, index) => {
+                // Each change in global array, default selected to true
+                globalChanges.push({
+                    ...change,
+                    index: index,
+                    selected: true
+                });
+
                 const listItem = document.createElement('li');
                 listItem.className = 'file-item';
 
-                // Create file path element
+                // If this is a "delete" action, highlight with .delete-item
+                if (change.action === 'delete') {
+                    listItem.classList.add('delete-item');
+                }
+
+                // File path element
                 const filePath = document.createElement('div');
                 filePath.className = 'file-path';
-                filePath.textContent = `${change.filePath}`;
+                filePath.textContent = change.filePath;
 
-                // Create description element
+                // Description element
                 const description = document.createElement('div');
                 description.className = 'file-description';
                 description.textContent = `${change.action.toUpperCase()}: ${change.description}`;
 
+                // Checkbox
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'change-checkbox';
+                checkbox.checked = true;
+                checkbox.addEventListener('click', (evt) => {
+                    evt.stopPropagation(); // don’t open diff
+                    globalChanges[index].selected = evt.target.checked;
+                });
+
                 listItem.appendChild(filePath);
                 listItem.appendChild(description);
+                listItem.appendChild(checkbox);
 
-                listItem.addEventListener('click', () => {
+                // Clicking the listItem (except for checkbox) triggers diff
+                listItem.addEventListener('click', (evt) => {
+                    if (evt.target === checkbox) {
+                        return; // ignore clicks on the checkbox itself
+                    }
                     vscode.postMessage({
                         command: 'viewDiff',
                         payload: { index }
                     });
                 });
+
                 list.appendChild(listItem);
             });
+
             changesContainer.appendChild(list);
         }
 
-        // Function to reset the UI
-        function resetUI() {
-            xmlInput.value = '';
+        // Clear changes from the UI
+        function clearChanges() {
             changesContainer.innerHTML = '';
-            applyChangesButton.style.display = 'none';
-            successMessage.style.display = 'none';
-            statusMessage.textContent = "Changes have been added successfully and the UI has been reset.";
-            statusMessage.style.color = "green";
+            globalChanges = [];
+            successMessage.classList.remove('visible');
         }
     })();
   </script>

@@ -5,6 +5,8 @@ const vscode = require("vscode");
 /**
  * Writes (or overwrites) the given file with the provided content.
  */
+const path = require('path');
+
 async function writeFile(filePath, content) {
   if (!vscode.workspace?.workspaceFolders?.length) {
     vscode.window.showErrorMessage("No workspace folder is open.");
@@ -12,15 +14,18 @@ async function writeFile(filePath, content) {
     return;
   }
 
-  // Resolve the file path in the first workspace folder for simplicity
   const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
   const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
 
+  // Extract directory path from filePath
+  const dirPath = path.dirname(fileUri.fsPath);
+
   try {
-    // Convert the string content to a Uint8Array
+    // Ensure the directory exists
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+
     const encoder = new TextEncoder();
     const fileData = encoder.encode(content);
-
     await vscode.workspace.fs.writeFile(fileUri, fileData);
     console.log(`File written successfully: ${filePath}`);
   } catch (error) {
