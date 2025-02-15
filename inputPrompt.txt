@@ -1,3 +1,1493 @@
+<file_map>
+├── xml-to-code
+│   ├── images
+│   ├── providers
+│   │   └── webview
+│   ├── test
+│   └── utils
+
+</file_map>
+
+<file_contents>
+File: providers/webview/webview.html
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>XML to Code</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">
+    /* Reset some default styles */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body {
+        height: 100%;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        display: flex;
+        flex-direction: column;
+    }
+
+    body {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    /************************************************************
+     * Collapsible Input Section
+     ************************************************************/
+    .collapsible-section {
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        overflow: hidden;
+        /* Ensures the input section doesn't push the fixed button */
+        margin-bottom: 20px;
+    }
+    /* Hidden (collapsed) state */
+    .collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+    /* Visible (expanded) state */
+    .expanded {
+        max-height: 500px; /* Adjust as needed */
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* The button that toggles the collapsible input (initially hidden) */
+    #toggleInputBtn {
+        display: none; /* Hidden by default, shown after changes are displayed */
+        padding: 5px 10px;
+        font-size: 0.9em;
+        margin-bottom: 10px;
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        color: var(--vscode-button-foreground);
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #toggleInputBtn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Heading & Description
+     ************************************************************/
+    h2 {
+        margin-bottom: 6px;
+        font-size: 1.3em;
+        color: var(--vscode-button-foreground);
+    }
+
+    p.description {
+        margin-bottom: 12px;
+        font-size: 0.85em;
+        color: var(--vscode-editor-foreground);
+    }
+
+    /************************************************************
+     * Textarea & Buttons
+     ************************************************************/
+    textarea {
+        width: 100%;
+        flex: 1;
+        padding: 10px;
+        font-size: 13px;
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        resize: vertical;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        margin-bottom: 12px;
+    }
+
+    .button-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    button {
+        padding: 8px 20px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Changes Container (the bottom list)
+     ************************************************************/
+    .changes-container {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: 60px; /* Space for the fixed button */
+    }
+
+    .file-list {
+        list-style-type: none;
+    }
+
+    .file-item {
+        padding: 8px;
+        margin-bottom: 5px;
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .file-item:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /* Highlight DELETE actions */
+    .delete-item {
+        background-color: rgba(255, 0, 0, 0.1); /* light red */
+        border: 1px solid rgba(255, 0, 0, 0.3);
+    }
+
+    .file-path {
+        font-size: 0.8em;
+        color: var(--vscode-editorWidget-border);
+        margin-bottom: 2px;
+    }
+
+    .file-description {
+        font-size: 0.95em;
+        color: var(--vscode-editor-foreground);
+    }
+
+    .change-checkbox {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        transform: scale(1.2);
+        cursor: pointer;
+    }
+
+    /************************************************************
+     * Fixed Apply Changes Button
+     ************************************************************/
+    .fixed-button-container {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--vscode-editor-background);
+        padding-top: 10px;
+        padding-bottom: 10px;
+        /* Removed the border-top line to have a cleaner look */
+    }
+
+    .fixed-button-container .button-container {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    /* Hide the Apply Changes button initially */
+    .fixed-button-container {
+        display: none;
+    }
+
+    /* Apply Changes Button Styling */
+    #applyChanges {
+        padding: 10px 20px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #applyChanges:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Notification Styles
+     ************************************************************/
+    .notification {
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        font-size: 0.9em;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .notification.success {
+        background-color: #e6f4ea; /* Light green background */
+        border: 1px solid #a3d8a4; /* Green border */
+        color: #2e7d32; /* Dark green text */
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .notification .icon {
+        margin-right: 10px;
+        font-size: 1.2em;
+    }
+
+    .notification .message {
+        flex: 1;
+    }
+
+    /* Optional: Animation for Success Message */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /************************************************************
+     * Status & Footer
+     ************************************************************/
+    #statusMessage {
+        margin-top: 5px;
+        color: red;
+    }
+
+    #successMessage.visible {
+        display: flex; /* Flex to align icon and message */
+    }
+
+    #successMessage {
+        display: none; /* Hidden by default */
+    }
+
+    footer {
+        padding-top: 15px;
+        /* previously had border-top, but let's keep it only for the footer if we want it here */
+        border-top: 1px solid var(--vscode-editorWidget-border);
+        text-align: center;
+        font-size: 0.75em;
+        color: var(--vscode-editor-foreground);
+        margin-top: auto;
+    }
+
+    footer a {
+        color: var(--vscode-button-foreground);
+        text-decoration: none;
+        margin: 0 5px;
+    }
+
+    footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Cancel button styling */
+    #cancelChanges {
+        background-color: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+    }
+
+    #cancelChanges:hover {
+        background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+  </style>
+</head>
+<body>
+  <!-- Collapsible container for the input area (starts expanded) -->
+  <div id="inputSection" class="collapsible-section expanded">
+    <h2>Paste your XML</h2>
+    <p class="description">
+      These should be the XML changes that are the output from the LLM that you're using.
+      Formatted like <a href="https://repoprompt.com" target="_blank">this</a>
+    </p>
+
+    <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
+
+    <div class="button-container">
+      <button id="prepareChanges">Prepare Changes</button>
+    </div>
+
+    <div id="statusMessage"></div>
+  </div>
+
+  <!-- Button to show/hide the input section (initially hidden) -->
+  <button id="toggleInputBtn">Show XML</button>
+
+  <!-- Changes Container -->
+  <div class="changes-container" id="changesContainer"></div>
+
+  <!-- Updated Success Message -->
+  <div id="successMessage" class="notification success">
+    <span class="icon">✔️</span>
+    <span class="message">Changes have been successfully applied.</span>
+  </div>
+
+  <!-- Fixed Apply Changes Button -->
+  <div class="fixed-button-container">
+    <div class="button-container">
+      <button id="cancelChanges">Cancel Changes</button>
+      <button id="applyChanges">Apply Changes</button>
+    </div>
+  </div>
+
+  <footer>
+    made to use together with:
+    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a>
+    <br /> <small>use the XML Whole prompt</small>
+
+    <br /><br />
+    Extension is made with ❤️ by Tim van de Vathorst -
+    <a href="https://github.com/timvdvathorst" target="_blank">GitHub</a> |
+    <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
+  </footer>
+
+  <script nonce="${nonce}">
+    // File: embedded webview.js
+
+    (function () {
+        console.log("Embedded webview.js has been loaded.");
+
+        // Acquire the VS Code API
+        const vscode = acquireVsCodeApi();
+
+        // Keep track of the changes in a global array so we can handle checkboxes
+        let globalChanges = [];
+
+        // Get references to DOM elements
+        const prepareChangesButton = document.getElementById('prepareChanges');
+        const applyChangesButton = document.getElementById('applyChanges');
+        const cancelChangesButton = document.getElementById('cancelChanges');
+        const xmlInput = document.getElementById('xmlInput');
+        const changesContainer = document.getElementById('changesContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        const successMessage = document.getElementById('successMessage');
+        const fixedButtonContainer = document.querySelector('.fixed-button-container');
+
+        // Collapsible input section and toggle button
+        const inputSection = document.getElementById('inputSection');
+        const toggleInputBtn = document.getElementById('toggleInputBtn');
+        let inputCollapsed = false;
+
+        // Ensure "Apply Changes" button is hidden on initial load
+        fixedButtonContainer.style.display = 'none';
+
+        // When user clicks "Prepare Changes"
+        prepareChangesButton.addEventListener('click', () => {
+            const xml = xmlInput.value.trim();
+            if (!xml) {
+                statusMessage.textContent = "Please enter XML input.";
+                statusMessage.style.color = "red";
+                return;
+            }
+            statusMessage.textContent = "";
+            vscode.postMessage({
+                command: 'applyXml',
+                payload: xml
+            });
+            console.log("Sent 'applyXml' message to extension.");
+        });
+
+        // When user clicks "Apply Changes"
+        applyChangesButton.addEventListener('click', () => {
+            // Collect the indices of changes that are still selected
+            const selectedIndexes = globalChanges
+                .filter(change => change.selected)
+                .map(change => change.index);
+
+            vscode.postMessage({
+                command: 'confirmApply',
+                payload: { selectedIndexes }
+            });
+            console.log("Sent 'confirmApply' message to extension with selectedIndexes:", selectedIndexes);
+        });
+
+        cancelChangesButton.addEventListener('click', () => {
+            const confirmCancel = confirm("Are you sure you want to cancel? All changes will be deleted.");
+            if (confirmCancel) {
+                vscode.postMessage({
+                    command: 'cancelChanges'
+                });
+            }
+        });
+
+        // Toggle button to show/hide the XML input area
+        toggleInputBtn.addEventListener('click', () => {
+            inputCollapsed = !inputCollapsed;
+            if (inputCollapsed) {
+                // Collapse
+                inputSection.classList.remove('expanded');
+                inputSection.classList.add('collapsed');
+                toggleInputBtn.textContent = 'Show XML';
+            } else {
+                // Expand
+                inputSection.classList.remove('collapsed');
+                inputSection.classList.add('expanded');
+                toggleInputBtn.textContent = 'Hide XML';
+            }
+        });
+
+        // Listen for messages from the extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            console.log("Received message from extension:", message);
+            switch (message.command) {
+                case 'displayChanges':
+                    displayChanges(message.payload);
+                    successMessage.style.display = 'none';
+                    // Show the fixed Apply Changes button only if there's at least one change
+                    if (message.payload.length > 0) {
+                        fixedButtonContainer.style.display = 'block';
+                    } else {
+                        fixedButtonContainer.style.display = 'none';
+                    }
+                    // Automatically collapse the input section when changes are displayed
+                    if (message.payload.length > 0) {
+                      inputSection.classList.remove('expanded');
+                      inputSection.classList.add('collapsed');
+                      inputCollapsed = true;
+                      toggleInputBtn.style.display = 'inline-block'; // Show the toggle button
+                      toggleInputBtn.textContent = 'Show XML'; // Because we've just collapsed it
+                    }
+                    break;
+
+                case 'changesApplied':
+                    successMessage.classList.add('visible');
+                    fixedButtonContainer.style.display = 'none';
+                    clearChanges();
+
+                    // Expand the input section again
+                    inputSection.classList.remove('collapsed');
+                    inputSection.classList.add('expanded');
+                    // Hide toggle button (reset state)
+                    toggleInputBtn.style.display = 'none';
+                    // Clear the text field
+                    xmlInput.value = "";
+                    inputCollapsed = false;
+                    break;
+
+                case 'clearChanges':
+                    clearChanges();
+                    fixedButtonContainer.style.display = 'none';
+                    break;
+
+                case 'cancelChanges':
+                    clearChanges();
+                    fixedButtonContainer.style.display = 'none';
+                    inputSection.classList.remove('collapsed');
+                    inputSection.classList.add('expanded');
+                    toggleInputBtn.style.display = 'none';
+                    xmlInput.value = "";
+                    successMessage.style.display = 'none';
+                    break;
+
+                default:
+                    console.warn("Unknown command:", message.command);
+            }
+        });
+
+        // Display pending changes in the UI
+        function displayChanges(changes) {
+            changesContainer.innerHTML = ''; // Clear previous changes
+            globalChanges = []; // Reset the global array
+
+            if (changes.length === 0) {
+                changesContainer.textContent = "No changes to display.";
+                return;
+            }
+
+            const list = document.createElement('ul');
+            list.className = 'file-list';
+
+            changes.forEach((change, index) => {
+                // Each change in global array, default selected to true
+                globalChanges.push({
+                    ...change,
+                    index: index,
+                    selected: true
+                });
+
+                const listItem = document.createElement('li');
+                listItem.className = 'file-item';
+
+                // If this is a "delete" action, highlight with .delete-item
+                if (change.action === 'delete') {
+                    listItem.classList.add('delete-item');
+                }
+
+                // File path element
+                const filePath = document.createElement('div');
+                filePath.className = 'file-path';
+                filePath.textContent = change.filePath;
+
+                // Description element
+                const description = document.createElement('div');
+                description.className = 'file-description';
+                description.textContent = `${change.action.toUpperCase()}: ${change.description}`;
+
+                // Checkbox
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'change-checkbox';
+                checkbox.checked = true;
+                checkbox.addEventListener('click', (evt) => {
+                    evt.stopPropagation(); // don’t open diff
+                    globalChanges[index].selected = evt.target.checked;
+                });
+
+                listItem.appendChild(filePath);
+                listItem.appendChild(description);
+                listItem.appendChild(checkbox);
+
+                // Clicking the listItem (except for checkbox) triggers diff
+                listItem.addEventListener('click', (evt) => {
+                    if (evt.target === checkbox) {
+                        return; // ignore clicks on the checkbox itself
+                    }
+                    vscode.postMessage({
+                        command: 'viewDiff',
+                        payload: { index }
+                    });
+                });
+
+                list.appendChild(listItem);
+            });
+
+            changesContainer.appendChild(list);
+        }
+
+        // Clear changes from the UI
+        function clearChanges() {
+            changesContainer.innerHTML = '';
+            globalChanges = [];
+            successMessage.classList.remove('visible');
+        }
+    })();
+  </script>
+</body>
+</html>
+```
+
+File: providers/xmlToCodeViewProvider.js
+```js
+"use strict";
+
+const vscode = require("vscode");
+const { DOMParser, XMLSerializer } = require("xmldom");
+const { writeFile } = require("../utils/fileUtils");
+const fs = require("fs");
+const path = require("path");
+const os = require("os"); // Moved require up for consistency
+
+// 1) Helper to convert ===...=== blocks to CDATA
+function convertTripleEqualsToCdata(xmlString) {
+  const contentRegex = /<content\b[^>]*>([\s\S]*?)<\/content>/gi;
+  return xmlString.replace(contentRegex, (match, inside) => {
+    const firstIdx = inside.indexOf("===");
+    const lastIdx = inside.lastIndexOf("===");
+
+    if (firstIdx !== -1 && lastIdx !== -1 && lastIdx > firstIdx) {
+      const before = inside.substring(0, firstIdx);
+      const code = inside.substring(firstIdx + 3, lastIdx);
+      const after = inside.substring(lastIdx + 3);
+
+      return `<content>${before}<![CDATA[${code}]]}${after}</content>`;
+    }
+
+    return match;
+  });
+}
+
+/**
+ * This class implements a WebviewViewProvider that displays our text area UI
+ * where the user can paste XML instructions, which we then parse into code changes.
+ */
+class XmlToCodeViewProvider {
+  constructor(context) {
+    this.context = context;
+    this.viewId = "xmlToCodeView";
+    this.pendingChanges = [];
+  }
+
+  resolveWebviewView(webviewView, _context, _token) {
+    this._view = webviewView;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this.context.extensionUri],
+    };
+
+    const nonce = this.getNonce();
+    webviewView.webview.html = this.getWebviewContent(webviewView.webview, nonce);
+
+    webviewView.webview.onDidReceiveMessage(async (message) => {
+      switch (message.command) {
+        case "applyXml":
+          try {
+            await this.prepareXmlModifications(message.payload);
+            webviewView.webview.postMessage({
+              command: "displayChanges",
+              payload: this.pendingChanges,
+            });
+          } catch (err) {
+            vscode.window.showErrorMessage("Error preparing XML modifications: " + err.message);
+          }
+          break;
+
+        case "confirmApply":
+          try {
+            const selectedIndexes = (message.payload && message.payload.selectedIndexes) || [];
+            await this.applyPendingChanges(selectedIndexes);
+            webviewView.webview.postMessage({ command: "changesApplied" });
+          } catch (err) {
+            vscode.window.showErrorMessage("Error applying XML modifications: " + err.message);
+          }
+          break;
+
+        case "previewChanges":
+          try {
+            await vscode.commands.executeCommand("xmlToCode.previewChanges");
+          } catch (err) {
+            vscode.window.showErrorMessage("Error previewing changes: " + err.message);
+          }
+          break;
+
+        case "viewDiff":
+          try {
+            const { index } = message.payload;
+            await this.viewDiff(index);
+          } catch (err) {
+            vscode.window.showErrorMessage("Error viewing diff: " + err.message);
+          }
+          break;
+
+        case 'cancelChanges':
+          this.pendingChanges = [];
+          webviewView.webview.postMessage({ command: 'clearChanges' });
+          break;
+
+        default:
+          break;
+      }
+    });
+  }
+
+  getWebviewContent(_webview, nonce) {
+    const htmlPath = vscode.Uri.joinPath(
+      this.context.extensionUri,
+      "providers",
+      "webview",
+      "webview.html"
+    );
+    let html = fs.readFileSync(htmlPath.fsPath, "utf8");
+    html = html.replace(/\${nonce}/g, nonce);
+    return html;
+  }
+
+  getNonce() {
+    let text = "";
+    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+  }
+
+  /**
+   * The main function that parses the XML input. We'll:
+   * 1) Auto-convert the user's === blocks into CDATA if possible.
+   * 2) Wrap the XML input within a single root element to handle multiple top-level elements.
+   * 3) Parse with xmldom.
+   * 4) Gather <file> nodes with action="create", "rewrite", or "delete".
+   */
+  async prepareXmlModifications(xmlInput) {
+    if (!xmlInput) {
+      vscode.window.showErrorMessage("No XML input provided.");
+      return;
+    }
+
+    // 1) Convert triple-equals to CDATA inside <content> blocks.
+    let processedXml = convertTripleEqualsToCdata(xmlInput);
+
+    // 2) Wrap the XML input with a single root element to ensure it's well-formed
+    processedXml = `<changes>${processedXml}</changes>`;
+
+    console.log("Processed XML after wrapping:", processedXml); // Debugging
+
+    // 3) Parse with xmldom
+    let xmlDoc;
+    try {
+      const parser = new DOMParser({
+        errorHandler: {
+          warning: () => { },
+          error: () => { },
+          fatalError: () => { },
+        },
+      });
+      xmlDoc = parser.parseFromString(processedXml, "text/xml");
+    } catch (e) {
+      vscode.window.showErrorMessage("Failed to parse XML input.");
+      console.error("XML Parsing Error:", e);
+      return;
+    }
+
+    // Check if parser threw error
+    const parserErrors = xmlDoc.getElementsByTagName("parsererror");
+    if (parserErrors.length > 0) {
+      vscode.window.showErrorMessage("XML input contains parser errors.");
+      console.error("Parser Errors:", parserErrors[0].textContent);
+      return;
+    }
+
+    this.pendingChanges = [];
+
+    // Grab all <file> nodes
+    const fileNodes = xmlDoc.getElementsByTagName("file");
+    console.log("Number of <file> nodes found:", fileNodes.length); // Debugging
+
+    if (!fileNodes || fileNodes.length === 0) {
+      vscode.window.showWarningMessage("No <file> nodes found in XML.");
+    }
+
+    for (let i = 0; i < fileNodes.length; i++) {
+      const fileNode = fileNodes.item(i);
+      let filePath = fileNode.getAttribute("path");
+      let action = fileNode.getAttribute("action");
+
+      if (!filePath || !action) {
+        continue;
+      }
+
+      // Normalize the file path
+      filePath = this.normalizeFilePath(filePath);
+
+      // Each <file> has 0..N <change> nodes (delete might not have a <change>)
+      const changeNodes = fileNode.getElementsByTagName("change");
+
+      if (action === "delete") {
+        // Handle delete action
+        let beforeContent = "";
+        try {
+          const workspaceUri = this.getWorkspaceUri();
+          if (workspaceUri) {
+            const fileUri = this.getFileUri(workspaceUri, filePath);
+            beforeContent = await this.getFileContentFromUri(fileUri);
+          }
+        } catch (err) {
+          // If the file doesn't exist, there's nothing to show in diff
+          beforeContent = "";
+        }
+
+        // Add a change item with empty 'after'
+        this.pendingChanges.push({
+          filePath,
+          action: "delete",
+          description: `Delete file ${filePath}`,
+          before: beforeContent,
+          after: "",
+        });
+      } else {
+        // For create or rewrite
+        for (let j = 0; j < changeNodes.length; j++) {
+          const changeNode = changeNodes.item(j);
+
+          // Read description from <description>
+          const descNodes = changeNode.getElementsByTagName("description");
+          let description = "";
+          if (descNodes && descNodes.length > 0) {
+            description = descNodes.item(0).textContent.trim();
+          }
+
+          // Grab <content> node
+          const contentNodes = changeNode.getElementsByTagName("content");
+          if (!contentNodes || !contentNodes.length) {
+            continue;
+          }
+
+          let rawCode = contentNodes.item(0).textContent.trim();
+
+          // If action is "rewrite" and content is empty, treat as "delete"
+          if (action === "rewrite" && !rawCode) {
+            // Change action to "delete"
+            action = "delete";
+
+            // Handle delete action
+            let beforeContent = "";
+            try {
+              const workspaceUri = this.getWorkspaceUri();
+              if (workspaceUri) {
+                const fileUri = this.getFileUri(workspaceUri, filePath);
+                beforeContent = await this.getFileContentFromUri(fileUri);
+              }
+            } catch (err) {
+              // If the file doesn't exist, there's nothing to show in diff
+              beforeContent = "";
+            }
+
+            // Add a change item with empty 'after'
+            this.pendingChanges.push({
+              filePath,
+              action: "delete",
+              description: `Delete file ${filePath}`,
+              before: beforeContent,
+              after: "",
+            });
+
+            continue; // Skip to next changeNode
+          }
+
+          if (action === "create" || action === "rewrite") {
+            // Add the create or rewrite change
+            this.pendingChanges.push({
+              filePath,
+              action,
+              description,
+              before: action === "rewrite" ? await this.getFileContent(filePath) : "",
+              after: rawCode,
+            });
+          }
+        }
+      }
+    }
+
+    if (this.pendingChanges.length === 0) {
+      vscode.window.showWarningMessage("No valid changes were parsed from the XML.");
+      return;
+    }
+
+    vscode.window.showInformationMessage("XML modifications prepared. Please review the changes.");
+  }
+
+  /**
+   * Normalize the file path to handle absolute and relative paths.
+   * If the path is relative, resolve it against the workspace root.
+   * If the path is absolute, use it as is.
+   * @param {string} filePath
+   * @returns {string} normalized file path
+   */
+  normalizeFilePath(filePath) {
+    // Check if the path is absolute
+    if (path.isAbsolute(filePath)) {
+      return path.normalize(filePath);
+    }
+
+    // If relative, ensure it starts with './' or '../' for consistency
+    if (!filePath.startsWith("./") && !filePath.startsWith("../")) {
+      filePath = `./${filePath}`;
+    }
+
+    return path.normalize(filePath);
+  }
+
+  /**
+   * Get the workspace URI. Handles cases where there might be multiple workspace folders.
+   * For simplicity, it uses the first workspace folder.
+   * @returns {vscode.Uri | null}
+   */
+  getWorkspaceUri() {
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+      return vscode.workspace.workspaceFolders[0].uri;
+    }
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    return null;
+  }
+
+  /**
+   * Resolve the file URI based on whether the path is absolute or relative.
+   * @param {vscode.Uri} workspaceUri
+   * @param {string} filePath
+   * @returns {vscode.Uri}
+   */
+  getFileUri(workspaceUri, filePath) {
+    if (path.isAbsolute(filePath)) {
+      return vscode.Uri.file(filePath);
+    }
+    return vscode.Uri.joinPath(workspaceUri, filePath);
+  }
+
+  /**
+   * Helper function to get the current content of a file from its URI.
+   */
+  async getFileContentFromUri(fileUri) {
+    try {
+      const fileData = await vscode.workspace.fs.readFile(fileUri);
+      return new TextDecoder().decode(fileData);
+    } catch (err) {
+      // If the file doesn't exist, return empty string
+      return "";
+    }
+  }
+
+  /**
+   * Helper function to get the current content of a file using its path.
+   * It handles both absolute and relative paths.
+   */
+  async getFileContent(filePath) {
+    try {
+      const workspaceUri = this.getWorkspaceUri();
+      if (!workspaceUri) {
+        return "";
+      }
+
+      const fileUri = this.getFileUri(workspaceUri, filePath);
+      return await this.getFileContentFromUri(fileUri);
+    } catch (err) {
+      // If the file doesn't exist, return empty string
+      return "";
+    }
+  }
+
+  async viewDiff(index) {
+    if (index < 0 || index >= this.pendingChanges.length) {
+      vscode.window.showErrorMessage("Invalid change index");
+      return;
+    }
+    const change = this.pendingChanges[index];
+    const { filePath, before, after } = change;
+    const workspaceUri = this.getWorkspaceUri();
+    if (!workspaceUri) {
+      return;
+    }
+
+    // Temporary files
+    const tempDir = path.join(os.tmpdir(), `xml-to-code-diff-${Date.now()}`);
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    // Write original
+    const originalFileName = `original_${path.basename(filePath)}`;
+    const tempOrigPath = path.join(tempDir, originalFileName);
+    fs.writeFileSync(tempOrigPath, before, "utf8");
+    const tempOrigUri = vscode.Uri.file(tempOrigPath);
+
+    // Write modified (could be empty for delete action)
+    const modifiedFileName = `modified_${path.basename(filePath)}`;
+    const tempModPath = path.join(tempDir, modifiedFileName);
+    fs.writeFileSync(tempModPath, after, "utf8");
+    const tempModUri = vscode.Uri.file(tempModPath);
+
+    try {
+      await vscode.commands.executeCommand(
+        "vscode.diff",
+        tempOrigUri,
+        tempModUri,
+        `${path.basename(filePath)} (Original) ↔ ${path.basename(filePath)} (Modified)`
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage("Failed to open diff view.");
+    }
+  }
+
+  async applyPendingChanges(selectedIndexes) {
+    // Only apply changes whose index is included in selectedIndexes
+    const changesToApply = this.pendingChanges.filter((_, i) => selectedIndexes.includes(i));
+
+    if (!changesToApply.length) {
+      vscode.window.showInformationMessage("No changes selected to apply.");
+      return;
+    }
+
+    for (const change of changesToApply) {
+      const { filePath, action, after } = change;
+
+      if (action === "delete") {
+        await this.deleteFile(filePath);
+      } else {
+        await writeFile(filePath, after);
+      }
+    }
+    vscode.window.showInformationMessage("Selected changes have been applied.");
+    this.pendingChanges = [];
+  }
+
+  async deleteFile(filePath) {
+    // Make sure we are in a workspace
+    const workspaceUri = this.getWorkspaceUri();
+    if (!workspaceUri) {
+      return;
+    }
+
+    const fileUri = this.getFileUri(workspaceUri, filePath);
+
+    try {
+      // Will throw if the file doesn't exist
+      await vscode.workspace.fs.delete(fileUri);
+      vscode.window.showInformationMessage(`Deleted file: ${filePath}`);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to delete file ${filePath}: ${err.message}`);
+    }
+  }
+}
+
+module.exports = {
+  XmlToCodeViewProvider
+};
+```
+
+File: utils/fileUtils.js
+```js
+"use strict";
+
+const vscode = require("vscode");
+
+/**
+ * Writes (or overwrites) the given file with the provided content.
+ */
+const path = require('path');
+
+async function writeFile(filePath, content) {
+  if (!vscode.workspace?.workspaceFolders?.length) {
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    console.error("writeFile called but no workspace folder is open.");
+    return;
+  }
+
+  const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
+  const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
+
+  // Extract directory path from filePath
+  const dirPath = path.dirname(fileUri.fsPath);
+
+  try {
+    // Ensure the directory exists
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+
+    const encoder = new TextEncoder();
+    const fileData = encoder.encode(content);
+    await vscode.workspace.fs.writeFile(fileUri, fileData);
+    console.log(`File written successfully: ${filePath}`);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to write file: ${filePath}`);
+    console.error(`Error writing file ${filePath}:`, error);
+  }
+}
+
+module.exports = {
+  writeFile
+};
+
+```
+
+File: CHANGELOG.md
+```md
+# Change Log
+
+All notable changes to the "xml-to-code" extension will be documented in this file.
+
+Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+
+## [Unreleased]
+
+- Initial release
+```
+
+File: .vscodeignore
+```vscodeignore
+.vscode/**
+.vscode-test/**
+test/**
+.gitignore
+.yarnrc
+vsc-extension-quickstart.md
+**/jsconfig.json
+**/*.map
+**/eslint.config.mjs
+**/.vscode-test.*
+
+```
+
+File: test/extension.test.js
+```js
+const assert = require('assert');
+
+// You can import and use all API from the 'vscode' module
+// as well as import your extension to test it
+const vscode = require('vscode');
+// const myExtension = require('../extension');
+
+suite('Extension Test Suite', () => {
+	vscode.window.showInformationMessage('Start all tests.');
+
+	test('Sample test', () => {
+		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
+		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	});
+});
+
+```
+
+File: extension.js
+```js
+"use strict";
+
+const vscode = require("vscode");
+const { XmlToCodeViewProvider } = require("./providers/xmlToCodeViewProvider");
+
+/**
+ * Extension activation: register our WebviewViewProvider so it appears in the sidebar.
+ */
+function activate(context) {
+  console.log("Activating xml-to-code extension.");
+  const provider = new XmlToCodeViewProvider(context);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      provider.viewId,
+      provider,
+      { webviewOptions: { retainContextWhenHidden: true } }
+    )
+  );
+  console.log("WebviewViewProvider registered successfully.");
+
+  // Register command to open the XML to Code view
+  const openViewCommand = vscode.commands.registerCommand('xmlToCode.openView', () => {
+    console.log("Executing command 'xmlToCode.openView'.");
+    vscode.commands.executeCommand('workbench.view.extension.xmlToCodeSidebar');
+  });
+  context.subscriptions.push(openViewCommand);
+
+  // Register command to view diffs
+  const viewDiffCommand = vscode.commands.registerCommand('xmlToCode.viewDiff', async (index) => {
+    console.log("Executing command 'xmlToCode.viewDiff' with index:", index);
+    const providerInstance = getProviderInstance(context);
+    await providerInstance.viewDiff(index);
+  });
+  context.subscriptions.push(viewDiffCommand);
+
+  // Automatically reveal the XML to Code view upon activation
+  vscode.commands.executeCommand('xmlToCode.openView');
+  console.log("XML to Code view has been opened programmatically.");
+}
+
+/**
+ * Helper function to retrieve the XmlToCodeViewProvider instance.
+ */
+function getProviderInstance(context) {
+  const provider = context.subscriptions.find(sub => sub instanceof XmlToCodeViewProvider);
+  if (provider) {
+    return provider;
+  }
+  throw new Error("XmlToCodeViewProvider instance not found.");
+}
+
+/**
+ * Deactivate function.
+ */
+function deactivate() {
+  console.log("Deactivating xml-to-code extension.");
+}
+
+module.exports = {
+  activate,
+  deactivate
+};
+```
+
+File: eslint.config.mjs
+```mjs
+import globals from "globals";
+
+export default [{
+    files: ["**/*.js"],
+    languageOptions: {
+        globals: {
+            ...globals.commonjs,
+            ...globals.node,
+            ...globals.mocha,
+        },
+
+        ecmaVersion: 2022,
+        sourceType: "module",
+    },
+
+    rules: {
+        "no-const-assign": "warn",
+        "no-this-before-super": "warn",
+        "no-undef": "warn",
+        "no-unreachable": "warn",
+        "no-unused-vars": "warn",
+        "constructor-super": "warn",
+        "valid-typeof": "warn",
+    },
+}];
+```
+
+File: jsconfig.json
+```json
+{
+	"compilerOptions": {
+		"module": "Node16",
+		"target": "ES2022",
+		"checkJs": false,  /* Typecheck .js files. */
+		"lib": [
+			"ES2022"
+		]
+	},
+	"exclude": [
+		"node_modules"
+	]
+}
+
+```
+
+File: LICENSE
+```LICENSE
+MIT License
+
+Copyright (c) 2024 Tim van de Vathorst
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+File: package.json
+```json
+{
+  "name": "xml-to-code",
+  "displayName": "xml-to-code",
+  "description": "repoparser xml-whole to code changes",
+  "version": "0.0.3",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:xmlToCodeView",
+    "onCommand:xmlToCode.openView",
+    "onCommand:xmlToCode.previewChanges",
+    "onCommand:xmlToCode.viewDiff"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xmlToCodeSidebar",
+          "title": "XML to Code",
+          "icon": "images/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "xmlToCodeSidebar": [
+        {
+          "type": "webview",
+          "id": "xmlToCodeView",
+          "name": "XML to Code"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "xmlToCode.openView",
+        "title": "Open XML to Code View"
+      },
+      {
+        "command": "xmlToCode.viewDiff",
+        "title": "View Diff"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.96.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "eslint": "^9.16.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1"
+  },
+  "dependencies": {
+    "xmldom": "^0.6.0"
+  },
+  "publisher": "TimvandeVathorst",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Timvdv/xml-to-code"
+  },
+  "keywords": ["XML to code", "RepoPrompt", "LLM parser"]
+}
+```
+
+File: README.md
+```md
+# xml-to-code
+
+Used to parse LLM XML output to code changes
+
+## Features
+
+- **XML Parsing:** Easily input XML instructions and parse them into structured code modifications.
+- **Webview Interface:** Intuitive UI within VS Code for managing and applying code changes.
+- **Diff Viewer:** Preview differences before applying changes to ensure accuracy.
+
+---
+
+## Installation
+
+1. **Clone the Repository:**
+
+   ```bash
+   git clone https://github.com/timvdvathorst/xml-to-code.git
+   ```
+
+2. **Navigate to the Extension Directory:**
+
+   ```bash
+   cd xml-to-code
+   ```
+
+3. **Install Dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+4. **Open in VS Code:**
+
+   ```bash
+   code .
+   ```
+
+5. **Launch the Extension:**
+   Press `F5` to open a new VS Code window with the extension loaded.
+
+---
+
+## Usage
+
+1. **Open XML to Code View:**
+
+   - Click on the **XML to Code** icon in the activity bar.
+   - Alternatively, use the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and execute `Open XML to Code View`.
+
+2. **Input XML Instructions:**
+
+   - Paste your XML-formatted instructions into the provided textarea.
+   - Ensure the XML follows the required schema for accurate parsing.
+
+3. **Prepare Changes:**
+
+   - Click the **Prepare Changes** button to parse the XML and generate a list of pending code changes.
+
+4. **Review Changes:**
+
+   - Review the list of changes in the **Changes** section.
+   - Click on individual changes to view diffs and ensure they meet your requirements.
+
+5. **Apply Changes:**
+
+   - Once satisfied, click the **Apply Changes** button to execute the modifications in your workspace.
+
+---
+
+## Example
+
+```xml
+<file path="src/components/MyComponent.js" action="rewrite">
+  <change>
+    <description>Add new state management logic to MyComponent</description>
+    <content>
+===
+import React, { useState } from 'react';
+
+const MyComponent = () => {
+  const [state, setState] = useState(null);
+
+  // New state management logic
+  const updateState = (newState) => {
+    setState(newState);
+  };
+
+  return (
+    <div>
+      {/* Component JSX */}
+    </div>
+  );
+};
+
+export default MyComponent;
+===
+    </content>
+  </change>
+</file>
+```
+
+---
+
+## Testing
+
+Run the test suite to ensure the extension functions as expected:
+
+```bash
+npm test
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+
+---
+
+Made to use together with:
+
+- [RepoPrompt](https://repoprompt.com)\
+  Use the **XML Whole** prompt for best results.
+
+Extension is made with ❤️ by Tim van de Vathorst\
+[GitHub](https://github.com/timvdvathorst) | [Donate](https://www.paypal.me/timvandevathorst)
+
+
+```
+
+File: .vscode-test.mjs
+```mjs
+import { defineConfig } from '@vscode/test-cli';
+
+export default defineConfig({
+	files: 'test/**/*.test.js',
+});
+
+```
+</file_contents>
+
 <xml_formatting_instructions>
 ### Role
 - You are a **code editing assistant**: You can fulfill edit requests and chat with the user about code or other questions. Provide complete instructions or code lines when replying with xml formatting.
@@ -17,30 +1507,30 @@ Avoid placeholders like `...` or `// existing code here`. Provide complete lines
 ### **Format to Follow for Repo Prompt's Diff Protocol**
 
 <Plan>
-Include any commentary on how you will approach the change.
+Describe your approach or reasoning here.
 </Plan>
 
-<file path="path/to/sample.swift" action="one_of_the_tools">
+<file path="path/to/example.swift" action="one_of_the_tools">
   <change>
-    <description>Describe the purpose of this change</description>
+    <description>Brief explanation of this specific change</description>
     <content>
 ===
-// new or edited lines here (full file if rewriting)
+// Provide the new or updated code here. Do not use placeholders
 ===
     </content>
   </change>
 </file>
 
 #### Tools Demonstration
-1. <file path="NewFile.swift" action="create"> (full file in <content>)
-2. <file path="RewriteMe.swift" action="rewrite"> (entire file in <content>)
-3. <file path="DeleteMe.swift" action="delete"> (empty <content>)
+1. `<file path="NewFile.swift" action="create">` – Full file in <content>
+2. `<file path="DeleteMe.swift" action="delete">` – Empty <content>
+3. `<file path="RewriteMe.swift" action="rewrite">` – Entire file in <content>
 
 ## Format Guidelines
 1. **Plan**: Begin with a `<Plan>` block explaining your approach.
 2. **<file> Tag**: e.g. `<file path="Models/User.swift" action="...">`. Must match an available tool.
-3. **<change> Tag**: Inside <file>, use `<description>` to explain. Then <search> (if partial) + <content>.
-4. **rewrite**: For entire-file changes, omit <search> and put the whole file in <content>.
+3. **<change> Tag**: Provide `<description>` to clarify each change. Then `<content>` for new/modified code. Additional rules depend on your capabilities.
+4. **rewrite**: Replace the entire file. This is the only way to modify existing files.
 5. **create**: For new files, put the full file in <content>.
 6. **delete**: Provide an empty <content>. The file is removed.
 
@@ -112,13 +1602,12 @@ Remove an obsolete file.
 </file>
 
 ## Final Notes
-1. Wrap code in <content> with ===.
-2. For rewriting a file, include the entire new file content in <content> with no <search> block.
-3. If a file doesn’t exist, use create. If the file already exists, do not create a duplicate.
-4. Wrap the final XML output in ```XML ... ``` for clarity.
-5. Output must compile/apply cleanly with no leftover placeholders or syntax errors.
-</xml_formatting_instructions>
-
-<user_instructions>
-Custom instructions here. 
+1.  **rewrite**  For rewriting an entire file, place all new content in `<content>`. No partial modifications are possible here. Avoid all use of placeholders.
+2. You can always **create** new files and **delete** existing files. Provide full code for create, and empty content for delete. Avoid creating files you know exist already.
+3. If a file tree is provided, place your files logically within that structure. Respect the user’s relative or absolute paths.
+4. Wrap your final output in ```XML ... ``` for clarity.
+5. **Important:** Do not wrap any XML output in CDATA tags (i.e. `<![CDATA[ ... ]]>`). Repo Prompt expects raw XML exactly as shown in the examples.
+6. The final output must apply cleanly with no leftover syntax errors.
+</xml_formatting_instructions><user_instructions>
+This is an example prompt for my GitHub repository
 </user_instructions>
