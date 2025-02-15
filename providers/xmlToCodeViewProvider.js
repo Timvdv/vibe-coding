@@ -5,6 +5,7 @@ const { DOMParser, XMLSerializer } = require("xmldom");
 const { writeFile } = require("../utils/fileUtils");
 const fs = require("fs");
 const path = require("path");
+const os = require("os"); // Moved require up for consistency
 
 // 1) Helper to convert ===...=== blocks to CDATA
 function convertTripleEqualsToCdata(xmlString) {
@@ -18,7 +19,7 @@ function convertTripleEqualsToCdata(xmlString) {
       const code = inside.substring(firstIdx + 3, lastIdx);
       const after = inside.substring(lastIdx + 3);
 
-      return `<content>${before}<![CDATA[${code}]]>${after}</content>`;
+      return `<content>${before}<![CDATA[${code}]]}${after}</content>`;
     }
 
     return match;
@@ -86,6 +87,11 @@ class XmlToCodeViewProvider {
           } catch (err) {
             vscode.window.showErrorMessage("Error viewing diff: " + err.message);
           }
+          break;
+
+        case 'cancelChanges':
+          this.pendingChanges = [];
+          webviewView.webview.postMessage({ command: 'clearChanges' });
           break;
 
         default:
@@ -180,6 +186,9 @@ class XmlToCodeViewProvider {
         continue;
       }
 
+      // Normalize the file path
+      filePath = this.normalizeFilePath(filePath);
+
       // Each <file> has 0..N <change> nodes (delete might not have a <change>)
       const changeNodes = fileNode.getElementsByTagName("change");
 
@@ -187,11 +196,10 @@ class XmlToCodeViewProvider {
         // Handle delete action
         let beforeContent = "";
         try {
-          if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-            const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
-            const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
-            const fileData = await vscode.workspace.fs.readFile(fileUri);
-            beforeContent = new TextDecoder().decode(fileData);
+          const workspaceUri = this.getWorkspaceUri();
+          if (workspaceUri) {
+            const fileUri = this.getFileUri(workspaceUri, filePath);
+            beforeContent = await this.getFileContentFromUri(fileUri);
           }
         } catch (err) {
           // If the file doesn't exist, there's nothing to show in diff
@@ -231,17 +239,13 @@ class XmlToCodeViewProvider {
             // Change action to "delete"
             action = "delete";
 
-            // Since it's a delete, we don't need to process <change> nodes
-            // Proceed to handle as delete below
-
             // Handle delete action
             let beforeContent = "";
             try {
-              if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-                const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
-                const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
-                const fileData = await vscode.workspace.fs.readFile(fileUri);
-                beforeContent = new TextDecoder().decode(fileData);
+              const workspaceUri = this.getWorkspaceUri();
+              if (workspaceUri) {
+                const fileUri = this.getFileUri(workspaceUri, filePath);
+                beforeContent = await this.getFileContentFromUri(fileUri);
               }
             } catch (err) {
               // If the file doesn't exist, there's nothing to show in diff
@@ -283,21 +287,82 @@ class XmlToCodeViewProvider {
   }
 
   /**
-   * Helper function to get the current content of a file.
+   * Normalize the file path to handle absolute and relative paths.
+   * If the path is relative, resolve it against the workspace root.
+   * If the path is absolute, use it as is.
+   * @param {string} filePath
+   * @returns {string} normalized file path
    */
-  async getFileContent(filePath) {
+  normalizeFilePath(filePath) {
+    // Check if the path is absolute
+    if (path.isAbsolute(filePath)) {
+      return path.normalize(filePath);
+    }
+
+    // If relative, ensure it starts with './' or '../' for consistency
+    if (!filePath.startsWith("./") && !filePath.startsWith("../")) {
+      filePath = `./${filePath}`;
+    }
+
+    return path.normalize(filePath);
+  }
+
+  /**
+   * Get the workspace URI. Handles cases where there might be multiple workspace folders.
+   * For simplicity, it uses the first workspace folder.
+   * @returns {vscode.Uri | null}
+   */
+  getWorkspaceUri() {
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+      return vscode.workspace.workspaceFolders[0].uri;
+    }
+    vscode.window.showErrorMessage("No workspace folder is open.");
+    return null;
+  }
+
+  /**
+   * Resolve the file URI based on whether the path is absolute or relative.
+   * @param {vscode.Uri} workspaceUri
+   * @param {string} filePath
+   * @returns {vscode.Uri}
+   */
+  getFileUri(workspaceUri, filePath) {
+    if (path.isAbsolute(filePath)) {
+      return vscode.Uri.file(filePath);
+    }
+    return vscode.Uri.joinPath(workspaceUri, filePath);
+  }
+
+  /**
+   * Helper function to get the current content of a file from its URI.
+   */
+  async getFileContentFromUri(fileUri) {
     try {
-      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-        const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
-        const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
-        const fileData = await vscode.workspace.fs.readFile(fileUri);
-        return new TextDecoder().decode(fileData);
-      }
+      const fileData = await vscode.workspace.fs.readFile(fileUri);
+      return new TextDecoder().decode(fileData);
     } catch (err) {
       // If the file doesn't exist, return empty string
       return "";
     }
-    return "";
+  }
+
+  /**
+   * Helper function to get the current content of a file using its path.
+   * It handles both absolute and relative paths.
+   */
+  async getFileContent(filePath) {
+    try {
+      const workspaceUri = this.getWorkspaceUri();
+      if (!workspaceUri) {
+        return "";
+      }
+
+      const fileUri = this.getFileUri(workspaceUri, filePath);
+      return await this.getFileContentFromUri(fileUri);
+    } catch (err) {
+      // If the file doesn't exist, return empty string
+      return "";
+    }
   }
 
   async viewDiff(index) {
@@ -307,24 +372,24 @@ class XmlToCodeViewProvider {
     }
     const change = this.pendingChanges[index];
     const { filePath, before, after } = change;
-    if (!vscode.workspace.workspaceFolders?.length) {
-      vscode.window.showErrorMessage("No workspace folder is open.");
+    const workspaceUri = this.getWorkspaceUri();
+    if (!workspaceUri) {
       return;
     }
-    const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
 
     // Temporary files
-    const os = require("os");
     const tempDir = path.join(os.tmpdir(), `xml-to-code-diff-${Date.now()}`);
     fs.mkdirSync(tempDir, { recursive: true });
 
     // Write original
-    const tempOrigPath = path.join(tempDir, `original_${path.basename(filePath)}`);
+    const originalFileName = `original_${path.basename(filePath)}`;
+    const tempOrigPath = path.join(tempDir, originalFileName);
     fs.writeFileSync(tempOrigPath, before, "utf8");
     const tempOrigUri = vscode.Uri.file(tempOrigPath);
 
     // Write modified (could be empty for delete action)
-    const tempModPath = path.join(tempDir, `modified_${path.basename(filePath)}`);
+    const modifiedFileName = `modified_${path.basename(filePath)}`;
+    const tempModPath = path.join(tempDir, modifiedFileName);
     fs.writeFileSync(tempModPath, after, "utf8");
     const tempModUri = vscode.Uri.file(tempModPath);
 
@@ -364,13 +429,12 @@ class XmlToCodeViewProvider {
 
   async deleteFile(filePath) {
     // Make sure we are in a workspace
-    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-      vscode.window.showErrorMessage("No workspace open. Cannot delete file.");
+    const workspaceUri = this.getWorkspaceUri();
+    if (!workspaceUri) {
       return;
     }
 
-    const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
-    const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
+    const fileUri = this.getFileUri(workspaceUri, filePath);
 
     try {
       // Will throw if the file doesn't exist
