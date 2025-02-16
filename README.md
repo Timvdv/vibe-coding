@@ -15,7 +15,7 @@ Used to parse LLM XML output to code changes
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/timvdvathorst/xml-to-code.git
+   git clone https://github.com/Timvdv/xml-to-code
    ```
 
 2. **Navigate to the Extension Directory:**
@@ -124,5 +124,5 @@ Made to use together with:
   Use the **XML Whole** prompt for best results.
 
 Extension is made with ❤️ by Tim van de Vathorst\
-[GitHub](https://github.com/timvdvathorst) | [Donate](https://www.paypal.me/timvandevathorst)
+[GitHub](https://github.com/Timvdv/xml-to-code) | [Donate](https://www.paypal.me/timvandevathorst)
 

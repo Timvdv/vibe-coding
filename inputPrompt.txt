@@ -353,7 +353,7 @@ File: providers/webview/webview.html
 
     <br /><br />
     Extension is made with ❤️ by Tim van de Vathorst -
-    <a href="https://github.com/timvdvathorst" target="_blank">GitHub</a> |
+    <a href="https://github.com/Timvdv/xml-to-code" target="_blank">GitHub</a> |
     <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
   </footer>
 
