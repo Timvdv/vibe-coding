@@ -5,7 +5,7 @@ const { DOMParser, XMLSerializer } = require("xmldom");
 const { writeFile } = require("../utils/fileUtils");
 const fs = require("fs");
 const path = require("path");
-const os = require("os"); // Moved require up for consistency
+const os = require("os");
 
 // 1) Helper to convert ===...=== blocks to CDATA
 function convertTripleEqualsToCdata(xmlString) {
@@ -19,7 +19,7 @@ function convertTripleEqualsToCdata(xmlString) {
       const code = inside.substring(firstIdx + 3, lastIdx);
       const after = inside.substring(lastIdx + 3);
 
-      return `<content>${before}<![CDATA[${code}]]}${after}</content>`;
+      return `${before}${code}${after}`;
     }
 
     return match;
@@ -46,7 +46,10 @@ class XmlToCodeViewProvider {
     };
 
     const nonce = this.getNonce();
-    webviewView.webview.html = this.getWebviewContent(webviewView.webview, nonce);
+    webviewView.webview.html = this.getWebviewContent(
+      webviewView.webview,
+      nonce
+    );
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
@@ -58,17 +61,22 @@ class XmlToCodeViewProvider {
               payload: this.pendingChanges,
             });
           } catch (err) {
-            vscode.window.showErrorMessage("Error preparing XML modifications: " + err.message);
+            vscode.window.showErrorMessage(
+              "Error preparing XML modifications: " + err.message
+            );
           }
           break;
 
         case "confirmApply":
           try {
-            const selectedIndexes = (message.payload && message.payload.selectedIndexes) || [];
+            const selectedIndexes =
+              (message.payload && message.payload.selectedIndexes) || [];
             await this.applyPendingChanges(selectedIndexes);
             webviewView.webview.postMessage({ command: "changesApplied" });
           } catch (err) {
-            vscode.window.showErrorMessage("Error applying XML modifications: " + err.message);
+            vscode.window.showErrorMessage(
+              "Error applying XML modifications: " + err.message
+            );
           }
           break;
 
@@ -76,7 +84,9 @@ class XmlToCodeViewProvider {
           try {
             await vscode.commands.executeCommand("xmlToCode.previewChanges");
           } catch (err) {
-            vscode.window.showErrorMessage("Error previewing changes: " + err.message);
+            vscode.window.showErrorMessage(
+              "Error previewing changes: " + err.message
+            );
           }
           break;
 
@@ -85,15 +95,39 @@ class XmlToCodeViewProvider {
             const { index } = message.payload;
             await this.viewDiff(index);
           } catch (err) {
-            vscode.window.showErrorMessage("Error viewing diff: " + err.message);
+            vscode.window.showErrorMessage(
+              "Error viewing diff: " + err.message
+            );
           }
           break;
 
-        case 'cancelChanges':
+        case "cancelChanges":
           this.pendingChanges = [];
-          webviewView.webview.postMessage({ command: 'clearChanges' });
+          webviewView.webview.postMessage({ command: "clearChanges" });
           break;
 
+        case "getFileTreeWithContents":
+          try {
+            const workspaceUri = this.getWorkspaceUri();
+            if (!workspaceUri) {
+              vscode.window.showErrorMessage("No workspace found.");
+              return;
+            }
+            const workspacePath = workspaceUri.fsPath;
+            const { treeStr, fileBlocks } =
+              this.generateFileTreeWithContents(workspacePath);
+            const output = `<file_map>\n${treeStr}\n</file_map>\n${fileBlocks}`;
+        
+            webviewView.webview.postMessage({
+              command: "fileTreeOutput",
+              payload: output,
+            });
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              "Error generating file tree: " + err.message
+            );
+          }
+          break;
         default:
           break;
       }
@@ -114,42 +148,32 @@ class XmlToCodeViewProvider {
 
   getNonce() {
     let text = "";
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const possible =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     for (let i = 0; i < 32; i++) {
       text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
   }
 
-  /**
-   * The main function that parses the XML input. We'll:
-   * 1) Auto-convert the user's === blocks into CDATA if possible.
-   * 2) Wrap the XML input within a single root element to handle multiple top-level elements.
-   * 3) Parse with xmldom.
-   * 4) Gather <file> nodes with action="create", "rewrite", or "delete".
-   */
   async prepareXmlModifications(xmlInput) {
     if (!xmlInput) {
       vscode.window.showErrorMessage("No XML input provided.");
       return;
     }
 
-    // 1) Convert triple-equals to CDATA inside <content> blocks.
     let processedXml = convertTripleEqualsToCdata(xmlInput);
+    processedXml = `${processedXml}`;
 
-    // 2) Wrap the XML input with a single root element to ensure it's well-formed
-    processedXml = `<changes>${processedXml}</changes>`;
+    console.log("Processed XML after wrapping:", processedXml);
 
-    console.log("Processed XML after wrapping:", processedXml); // Debugging
-
-    // 3) Parse with xmldom
     let xmlDoc;
     try {
       const parser = new DOMParser({
         errorHandler: {
-          warning: () => { },
-          error: () => { },
-          fatalError: () => { },
+          warning: () => {},
+          error: () => {},
+          fatalError: () => {},
         },
       });
       xmlDoc = parser.parseFromString(processedXml, "text/xml");
@@ -159,7 +183,6 @@ class XmlToCodeViewProvider {
       return;
     }
 
-    // Check if parser threw error
     const parserErrors = xmlDoc.getElementsByTagName("parsererror");
     if (parserErrors.length > 0) {
       vscode.window.showErrorMessage("XML input contains parser errors.");
@@ -168,13 +191,11 @@ class XmlToCodeViewProvider {
     }
 
     this.pendingChanges = [];
-
-    // Grab all <file> nodes
     const fileNodes = xmlDoc.getElementsByTagName("file");
-    console.log("Number of <file> nodes found:", fileNodes.length); // Debugging
+    console.log("Number of  nodes found:", fileNodes.length);
 
     if (!fileNodes || fileNodes.length === 0) {
-      vscode.window.showWarningMessage("No <file> nodes found in XML.");
+      vscode.window.showWarningMessage("No  nodes found in XML.");
     }
 
     for (let i = 0; i < fileNodes.length; i++) {
@@ -186,14 +207,10 @@ class XmlToCodeViewProvider {
         continue;
       }
 
-      // Normalize the file path
       filePath = this.normalizeFilePath(filePath);
-
-      // Each <file> has 0..N <change> nodes (delete might not have a <change>)
       const changeNodes = fileNode.getElementsByTagName("change");
 
       if (action === "delete") {
-        // Handle delete action
         let beforeContent = "";
         try {
           const workspaceUri = this.getWorkspaceUri();
@@ -202,11 +219,9 @@ class XmlToCodeViewProvider {
             beforeContent = await this.getFileContentFromUri(fileUri);
           }
         } catch (err) {
-          // If the file doesn't exist, there's nothing to show in diff
           beforeContent = "";
         }
 
-        // Add a change item with empty 'after'
         this.pendingChanges.push({
           filePath,
           action: "delete",
@@ -215,31 +230,21 @@ class XmlToCodeViewProvider {
           after: "",
         });
       } else {
-        // For create or rewrite
         for (let j = 0; j < changeNodes.length; j++) {
           const changeNode = changeNodes.item(j);
-
-          // Read description from <description>
           const descNodes = changeNode.getElementsByTagName("description");
           let description = "";
           if (descNodes && descNodes.length > 0) {
             description = descNodes.item(0).textContent.trim();
           }
-
-          // Grab <content> node
           const contentNodes = changeNode.getElementsByTagName("content");
           if (!contentNodes || !contentNodes.length) {
             continue;
           }
-
           let rawCode = contentNodes.item(0).textContent.trim();
 
-          // If action is "rewrite" and content is empty, treat as "delete"
           if (action === "rewrite" && !rawCode) {
-            // Change action to "delete"
             action = "delete";
-
-            // Handle delete action
             let beforeContent = "";
             try {
               const workspaceUri = this.getWorkspaceUri();
@@ -248,11 +253,8 @@ class XmlToCodeViewProvider {
                 beforeContent = await this.getFileContentFromUri(fileUri);
               }
             } catch (err) {
-              // If the file doesn't exist, there's nothing to show in diff
               beforeContent = "";
             }
-
-            // Add a change item with empty 'after'
             this.pendingChanges.push({
               filePath,
               action: "delete",
@@ -260,17 +262,16 @@ class XmlToCodeViewProvider {
               before: beforeContent,
               after: "",
             });
-
-            continue; // Skip to next changeNode
+            continue;
           }
 
           if (action === "create" || action === "rewrite") {
-            // Add the create or rewrite change
             this.pendingChanges.push({
               filePath,
               action,
               description,
-              before: action === "rewrite" ? await this.getFileContent(filePath) : "",
+              before:
+                action === "rewrite" ? await this.getFileContent(filePath) : "",
               after: rawCode,
             });
           }
@@ -279,53 +280,38 @@ class XmlToCodeViewProvider {
     }
 
     if (this.pendingChanges.length === 0) {
-      vscode.window.showWarningMessage("No valid changes were parsed from the XML.");
+      vscode.window.showWarningMessage(
+        "No valid changes were parsed from the XML."
+      );
       return;
     }
 
-    vscode.window.showInformationMessage("XML modifications prepared. Please review the changes.");
+    vscode.window.showInformationMessage(
+      "XML modifications prepared. Please review the changes."
+    );
   }
 
-  /**
-   * Normalize the file path to handle absolute and relative paths.
-   * If the path is relative, resolve it against the workspace root.
-   * If the path is absolute, use it as is.
-   * @param {string} filePath
-   * @returns {string} normalized file path
-   */
   normalizeFilePath(filePath) {
-    // Check if the path is absolute
     if (path.isAbsolute(filePath)) {
       return path.normalize(filePath);
     }
-
-    // If relative, ensure it starts with './' or '../' for consistency
     if (!filePath.startsWith("./") && !filePath.startsWith("../")) {
       filePath = `./${filePath}`;
     }
-
     return path.normalize(filePath);
   }
 
-  /**
-   * Get the workspace URI. Handles cases where there might be multiple workspace folders.
-   * For simplicity, it uses the first workspace folder.
-   * @returns {vscode.Uri | null}
-   */
   getWorkspaceUri() {
-    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    if (
+      vscode.workspace.workspaceFolders &&
+      vscode.workspace.workspaceFolders.length > 0
+    ) {
       return vscode.workspace.workspaceFolders[0].uri;
     }
     vscode.window.showErrorMessage("No workspace folder is open.");
     return null;
   }
 
-  /**
-   * Resolve the file URI based on whether the path is absolute or relative.
-   * @param {vscode.Uri} workspaceUri
-   * @param {string} filePath
-   * @returns {vscode.Uri}
-   */
   getFileUri(workspaceUri, filePath) {
     if (path.isAbsolute(filePath)) {
       return vscode.Uri.file(filePath);
@@ -333,34 +319,24 @@ class XmlToCodeViewProvider {
     return vscode.Uri.joinPath(workspaceUri, filePath);
   }
 
-  /**
-   * Helper function to get the current content of a file from its URI.
-   */
   async getFileContentFromUri(fileUri) {
     try {
       const fileData = await vscode.workspace.fs.readFile(fileUri);
       return new TextDecoder().decode(fileData);
     } catch (err) {
-      // If the file doesn't exist, return empty string
       return "";
     }
   }
 
-  /**
-   * Helper function to get the current content of a file using its path.
-   * It handles both absolute and relative paths.
-   */
   async getFileContent(filePath) {
     try {
       const workspaceUri = this.getWorkspaceUri();
       if (!workspaceUri) {
         return "";
       }
-
       const fileUri = this.getFileUri(workspaceUri, filePath);
       return await this.getFileContentFromUri(fileUri);
     } catch (err) {
-      // If the file doesn't exist, return empty string
       return "";
     }
   }
@@ -376,29 +352,24 @@ class XmlToCodeViewProvider {
     if (!workspaceUri) {
       return;
     }
-
-    // Temporary files
     const tempDir = path.join(os.tmpdir(), `xml-to-code-diff-${Date.now()}`);
     fs.mkdirSync(tempDir, { recursive: true });
-
-    // Write original
     const originalFileName = `original_${path.basename(filePath)}`;
     const tempOrigPath = path.join(tempDir, originalFileName);
     fs.writeFileSync(tempOrigPath, before, "utf8");
     const tempOrigUri = vscode.Uri.file(tempOrigPath);
-
-    // Write modified (could be empty for delete action)
     const modifiedFileName = `modified_${path.basename(filePath)}`;
     const tempModPath = path.join(tempDir, modifiedFileName);
     fs.writeFileSync(tempModPath, after, "utf8");
     const tempModUri = vscode.Uri.file(tempModPath);
-
     try {
       await vscode.commands.executeCommand(
         "vscode.diff",
         tempOrigUri,
         tempModUri,
-        `${path.basename(filePath)} (Original) ↔ ${path.basename(filePath)} (Modified)`
+        `${path.basename(filePath)} (Original) ↔ ${path.basename(
+          filePath
+        )} (Modified)`
       );
     } catch (error) {
       vscode.window.showErrorMessage("Failed to open diff view.");
@@ -406,8 +377,9 @@ class XmlToCodeViewProvider {
   }
 
   async applyPendingChanges(selectedIndexes) {
-    // Only apply changes whose index is included in selectedIndexes
-    const changesToApply = this.pendingChanges.filter((_, i) => selectedIndexes.includes(i));
+    const changesToApply = this.pendingChanges.filter((_, i) =>
+      selectedIndexes.includes(i)
+    );
 
     if (!changesToApply.length) {
       vscode.window.showInformationMessage("No changes selected to apply.");
@@ -416,7 +388,6 @@ class XmlToCodeViewProvider {
 
     for (const change of changesToApply) {
       const { filePath, action, after } = change;
-
       if (action === "delete") {
         await this.deleteFile(filePath);
       } else {
@@ -428,24 +399,47 @@ class XmlToCodeViewProvider {
   }
 
   async deleteFile(filePath) {
-    // Make sure we are in a workspace
     const workspaceUri = this.getWorkspaceUri();
     if (!workspaceUri) {
       return;
     }
-
     const fileUri = this.getFileUri(workspaceUri, filePath);
-
     try {
-      // Will throw if the file doesn't exist
       await vscode.workspace.fs.delete(fileUri);
       vscode.window.showInformationMessage(`Deleted file: ${filePath}`);
     } catch (err) {
-      vscode.window.showErrorMessage(`Failed to delete file ${filePath}: ${err.message}`);
+      vscode.window.showErrorMessage(
+        `Failed to delete file ${filePath}: ${err.message}`
+      );
     }
+  }
+
+  generateFileTreeWithContents(dir, prefix = "") {
+    let treeStr = "";
+    let fileBlocks = "";
+    const items = fs.readdirSync(dir).sort();
+  
+    items.forEach((item, index) => {
+      const fullPath = path.join(dir, item);
+      const isLast = index === items.length - 1;
+      const branch = isLast ? "└── " : "├── ";
+      treeStr += prefix + branch + item + "\n";
+  
+      if (fs.statSync(fullPath).isDirectory()) {
+        const newPrefix = prefix + (isLast ? "    " : "│   ");
+        const result = this.generateFileTreeWithContents(fullPath, newPrefix);
+        treeStr += result.treeStr;
+        fileBlocks += result.fileBlocks;
+      } else {
+        fileBlocks += ""; // simplified for debugging
+      }
+    });
+  
+    console.log({ treeStr, fileBlocks }); // IMPORTANT: Check your extension logs
+    return { treeStr, fileBlocks };
   }
 }
 
 module.exports = {
-  XmlToCodeViewProvider
+  XmlToCodeViewProvider,
 };
