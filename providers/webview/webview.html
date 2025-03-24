@@ -3,267 +3,326 @@
 <head>
   <meta charset="UTF-8">
   <title>XML to Code</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
-  <style nonce="${nonce}">
-    /* Reset default styles */
+  <!-- Updated CSP meta tag to allow external CSS/JS via webview.cspSource -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource}; img-src ${cspSource};">  
+  <!-- Include external CSS file -->
+  <link rel="stylesheet" href="${webviewCssUri}" />
+  <!-- Embedded CSS styles -->
+  <style>
+    /* Reset some default styles */
     * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
     }
+
     html, body {
-      height: 100%;
-      background-color: var(--vscode-editor-background);
-      color: var(--vscode-editor-foreground);
-      font-family: sans-serif;
+        height: 100%;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        display: flex;
+        flex-direction: column;
     }
+
     body {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
+
+    /************************************************************
+     * Collapsible Input Section
+     ************************************************************/
+    .collapsible-section {
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        overflow: hidden;
+        /* Ensures the input section doesn't push the fixed button */
+        margin-bottom: 20px;
+    }
+    /* Hidden (collapsed) state */
+    .collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+    /* Visible (expanded) state */
+    .expanded {
+        max-height: 500px; /* Adjust as needed */
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* The button that toggles the collapsible input (initially hidden) */
+    #toggleInputBtn {
+        display: none; /* Hidden by default, shown after changes are displayed */
+        padding: 5px 10px;
+        font-size: 0.9em;
+        margin-bottom: 10px;
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        color: var(--vscode-button-foreground);
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #toggleInputBtn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Heading & Description
+     ************************************************************/
+    h2 {
+        margin-bottom: 6px;
+        font-size: 1.3em;
+        color: var(--vscode-button-foreground);
+    }
+
+    p.description {
+        margin-bottom: 12px;
+        font-size: 0.85em;
+        color: var(--vscode-editor-foreground);
+    }
+
+    /************************************************************
+     * Textarea & Buttons
+     ************************************************************/
+    textarea {
+        width: 100%;
+        flex: 1;
+        padding: 10px;
+        font-size: 13px;
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        resize: vertical;
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        margin-bottom: 12px;
+    }
+
+    .button-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    button {
+        padding: 8px 20px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Changes Container (the bottom list)
+     ************************************************************/
+    .changes-container {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: 60px; /* Space for the fixed button */
+    }
+
+    .file-list {
+        list-style-type: none;
+    }
+
+    .file-item {
+        padding: 8px;
+        margin-bottom: 5px;
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .file-item:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /* Highlight DELETE actions */
+    .delete-item {
+        background-color: rgba(255, 0, 0, 0.1); /* light red */
+        border: 1px solid rgba(255, 0, 0, 0.3);
+    }
+
+    .file-path {
+        font-size: 0.8em;
+        color: var(--vscode-editorWidget-border);
+        margin-bottom: 2px;
+    }
+
+    .file-description {
+        font-size: 0.95em;
+        color: var(--vscode-editor-foreground);
+    }
+
+    .change-checkbox {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        transform: scale(1.2);
+        cursor: pointer;
+    }
+
+    /************************************************************
+     * Fixed Apply Changes Button
+     ************************************************************/
+    .fixed-button-container {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--vscode-editor-background);
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .fixed-button-container .button-container {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    /* Hide the Apply Changes button initially */
+    .fixed-button-container {
+        display: none;
+    }
+
+    /* Apply Changes Button Styling */
+    #applyChanges {
+        padding: 10px 20px;
+        font-size: 14px;
+        color: var(--vscode-button-foreground);
+        background-color: var(--vscode-button-background);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    #applyChanges:hover {
+        background-color: var(--vscode-button-hoverBackground);
+    }
+
+    /************************************************************
+     * Notification Styles
+     ************************************************************/
+    .notification {
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        font-size: 0.9em;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .notification.success {
+        background-color: #e6f4ea; /* Light green background */
+        border: 1px solid #a3d8a4; /* Green border */
+        color: #2e7d32; /* Dark green text */
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .notification .icon {
+        margin-right: 10px;
+        font-size: 1.2em;
+    }
+
+    .notification .message {
+        flex: 1;
+    }
+
+    /* Optional: Animation for Success Message */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /************************************************************
+     * Status & Footer
+     ************************************************************/
+    #statusMessage {
+        margin-top: 5px;
+        color: red;
+    }
+
+    #successMessage.visible {
+        display: flex; /* Flex to align icon and message */
+    }
+
+    #successMessage {
+        display: none; /* Hidden by default */
+    }
+
+    footer {
+        padding-top: 15px;
+        border-top: 1px solid var(--vscode-editorWidget-border);
+        text-align: center;
+        font-size: 0.75em;
+        color: var(--vscode-editor-foreground);
+        margin-top: auto;
+    }
+
+    footer a {
+        color: var(--vscode-button-foreground);
+        text-decoration: none;
+        margin: 0 5px;
+    }
+
+    footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Cancel button styling */
+    #cancelChanges {
+        background-color: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-button-secondaryForeground);
+    }
+
+    #cancelChanges:hover {
+        background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+
     /* Tab Navigation */
     .tab-buttons {
-      display: flex;
-      border-bottom: 1px solid var(--vscode-editorWidget-border);
-      margin-bottom: 10px;
+        display: flex;
+        margin-bottom: 15px;
     }
+
     .tab-button {
-      padding: 10px 20px;
-      cursor: pointer;
-      border: none;
-      background: none;
-      color: var(--vscode-editor-foreground);
-      font-size: 1em;
+        margin-right: 5px;
+        padding: 5px 10px;
+        background-color: transparent;
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 4px 4px 0 0;
+        cursor: pointer;
     }
+
     .tab-button.active {
-      border-bottom: 2px solid var(--vscode-button-background);
-      font-weight: bold;
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border-bottom: none;
     }
+
     .tab-content {
-      flex: 1;
-      display: none;
+        display: none;
     }
+
     .tab-content.active {
-      display: block;
-    }
-    /* XML Input Tab Styles */
-    .collapsible-section {
-      transition: max-height 0.3s ease, opacity 0.3s ease;
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-    .collapsed {
-      max-height: 0 !important;
-      opacity: 0;
-      pointer-events: none;
-    }
-    .expanded {
-      max-height: 500px;
-      opacity: 1;
-      pointer-events: auto;
-    }
-    #toggleInputBtn {
-      display: none;
-      padding: 5px 10px;
-      font-size: 0.9em;
-      margin-bottom: 10px;
-      background-color: var(--vscode-button-background);
-      border: none;
-      border-radius: 4px;
-      color: var(--vscode-button-foreground);
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-    }
-    #toggleInputBtn:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    h2 {
-      margin-bottom: 6px;
-      font-size: 1.3em;
-      color: var(--vscode-button-foreground);
-    }
-    p.description {
-      margin-bottom: 12px;
-      font-size: 0.85em;
-      color: var(--vscode-editor-foreground);
-    }
-    textarea {
-      width: 100%;
-      padding: 10px;
-      font-size: 13px;
-      border: 1px solid var(--vscode-editorWidget-border);
-      border-radius: 4px;
-      resize: vertical;
-      background-color: var(--vscode-editor-background);
-      color: var(--vscode-editor-foreground);
-      margin-bottom: 12px;
-    }
-    .button-container {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    button {
-      padding: 8px 20px;
-      font-size: 14px;
-      color: var(--vscode-button-foreground);
-      background-color: var(--vscode-button-background);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-    }
-    button:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    .changes-container {
-      flex: 1;
-      overflow-y: auto;
-      margin-bottom: 60px;
-    }
-    .file-list {
-      list-style-type: none;
-    }
-    .file-item {
-      padding: 8px;
-      margin-bottom: 5px;
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-editorWidget-border);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-    .file-item:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    .delete-item {
-      background-color: rgba(255, 0, 0, 0.1);
-      border: 1px solid rgba(255, 0, 0, 0.3);
-    }
-    .file-path {
-      font-size: 0.8em;
-      color: var(--vscode-editorWidget-border);
-      margin-bottom: 2px;
-    }
-    .file-description {
-      font-size: 0.95em;
-      color: var(--vscode-editor-foreground);
-    }
-    .change-checkbox {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      transform: scale(1.2);
-      cursor: pointer;
-    }
-    .fixed-button-container {
-      position: sticky;
-      bottom: 0;
-      background-color: var(--vscode-editor-background);
-      padding-top: 10px;
-      padding-bottom: 10px;
-    }
-    #applyChanges {
-      padding: 10px 20px;
-      font-size: 14px;
-      color: var(--vscode-button-foreground);
-      background-color: var(--vscode-button-background);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.3s ease;
-    }
-    #applyChanges:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-    .notification {
-      display: flex;
-      align-items: center;
-      padding: 10px 15px;
-      border-radius: 5px;
-      margin-top: 15px;
-      font-size: 0.9em;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .notification.success {
-      background-color: #e6f4ea;
-      border: 1px solid #a3d8a4;
-      color: #2e7d32;
-      animation: fadeIn 0.5s ease-out;
-    }
-    .notification .icon {
-      margin-right: 10px;
-      font-size: 1.2em;
-    }
-    .notification .message {
-      flex: 1;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    #statusMessage {
-      margin-top: 5px;
-      color: red;
-    }
-    #successMessage.visible {
-      display: flex;
-    }
-    #successMessage {
-      display: none;
-    }
-    footer {
-      padding-top: 15px;
-      border-top: 1px solid var(--vscode-editorWidget-border);
-      text-align: center;
-      font-size: 0.75em;
-      color: var(--vscode-editor-foreground);
-      margin-top: auto;
-    }
-    footer a {
-      color: var(--vscode-button-foreground);
-      text-decoration: none;
-      margin: 0 5px;
-    }
-    footer a:hover {
-      text-decoration: underline;
-    }
-    #cancelChanges {
-      background-color: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-    }
-    #cancelChanges:hover {
-      background-color: var(--vscode-button-secondaryHoverBackground);
-    }
-    /* File Tree Tab Styles */
-    #fileTreeList {
-      margin-top: 10px;
-    }
-    #fileTreeList div {
-      display: flex;
-      align-items: center;
-      margin: 5px 0;
-    }
-    #fileTreeList input[type="checkbox"] {
-      margin-right: 5px;
-    }
-    #copyOutput {
-      margin-top: 10px;
-    }
-    #instructions {
-      width: 100%;
-      padding: 8px;
-      margin-top: 10px;
-      font-size: 13px;
-      border: 1px solid var(--vscode-editorWidget-border);
-      border-radius: 4px;
-      background-color: var(--vscode-editor-background);
-      color: var(--vscode-editor-foreground);
+        display: block;
     }
   </style>
 </head>
@@ -306,9 +365,7 @@
   <div id="fileTreeTab" class="tab-content">
     <h2>File Tree Overview</h2>
     <p class="description">Select files to include in the copied XML output and add any additional instructions below.</p>
-    <div id="fileTreeList">
-      <!-- File tree with checkboxes will be populated here -->
-    </div>
+    <div id="fileTreeList"></div>
     <textarea id="instructions" placeholder="Enter additional instructions to include..."></textarea>
     <div class="button-container">
       <button id="copyOutput">Copy XML Output</button>
@@ -316,308 +373,12 @@
   </div>
   
   <footer>
-    made to use together with:
-    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a>
-    <br /> <small>use the XML Whole prompt</small>
-    <br /><br />
     Extension is made with ❤️ by Tim van de Vathorst -
     <a href="https://github.com/Timvdv/xml-to-code" target="_blank">GitHub</a> |
     <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
   </footer>
   
-  <script nonce="${nonce}">
-    (function () {
-      console.log("Embedded webview.js has been loaded.");
-      const vscode = acquireVsCodeApi();
-      
-      // Global variables for file tree
-      let fileTreeData = [];
-      const copyOutputButton = document.getElementById('copyOutput');
-      const instructionsField = document.getElementById('instructions');
-      
-      // Helper functions for XML parsing and conversion
-      function xmlDocToArray(xmlDoc) {
-        // Assumes XML structure <file_map> with child <file> elements
-        const fileElements = xmlDoc.getElementsByTagName('file');
-        return Array.from(fileElements);
-      }
-      
-      function fileElementsToData(fileElements) {
-        return fileElements.map(el => {
-          const path = el.getAttribute('path') || "unknown";
-          const contentElem = el.getElementsByTagName('content')[0];
-          const content = contentElem ? contentElem.textContent.trim() : "";
-          return { path, content };
-        });
-      }
-      
-      function xmlEntitiesEncode(str) {
-        return str.replace(/[<>&'"]/g, function(c) {
-          return {'<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;'}[c];
-        });
-      }
-      
-      function parseFileTreeOutput(payload) {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(payload, "text/xml");
-        const fileElements = xmlDocToArray(xmlDoc);
-        return fileElementsToData(fileElements);
-      }
-      
-      function renderFileTree(files) {
-        const fileTreeList = document.getElementById('fileTreeList');
-        fileTreeList.innerHTML = "";
-        files.forEach((file) => {
-          const container = document.createElement('div');
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.checked = true;
-          checkbox.className = 'file-checkbox';
-          container.appendChild(checkbox);
-          const label = document.createElement('label');
-          label.textContent = file.path;
-          container.appendChild(label);
-          fileTreeList.appendChild(container);
-        });
-      }
-      
-      function handleCopy() {
-        const fileTreeList = document.getElementById('fileTreeList');
-        const checkboxes = fileTreeList.querySelectorAll('.file-checkbox');
-      
-        let output = '<file_map>\n';
-        fileTreeData.forEach((file, index) => {
-          if (checkboxes[index].checked) {
-            output += file.path + '\n';
-          }
-        });
-        output += '</file_map>\n';
-      
-        fileTreeData.forEach((file, index) => {
-          if (checkboxes[index].checked) {
-            output += `<file path="${file.path}" action="rewrite">\n`;
-            output += '  <change>\n';
-            output += `    <description>Update content of ${file.path}</description>\n`;
-            output += '    <content>\n';
-            output += '===\n';
-            output += `${file.content}\n`;
-            output += '===\n';
-            output += '    </content>\n';
-            output += '  </change>\n';
-            output += '</file>\n';
-          }
-        });
-      
-        output += '</file_map>\n';
-      
-        const instructions = instructionsField.value.trim();
-        if (instructions) {
-          output += `\n<instructions>\n${instructions}\n</instructions>`;
-        }
-      
-        navigator.clipboard.writeText(output).then(() => {
-          alert("XML output copied to clipboard!");
-        }).catch(err => {
-          alert("Failed to copy output: " + err);
-        });
-      }
-      
-      copyOutputButton.addEventListener('click', handleCopy);
-      
-      // Tab switching functionality
-      const tabXmlInput = document.getElementById('tabXmlInput');
-      const tabFileTree = document.getElementById('tabFileTree');
-      const xmlInputTab = document.getElementById('xmlInputTab');
-      const fileTreeTab = document.getElementById('fileTreeTab');
-      
-      tabXmlInput.addEventListener('click', () => {
-        tabXmlInput.classList.add('active');
-        tabFileTree.classList.remove('active');
-        xmlInputTab.classList.add('active');
-        fileTreeTab.classList.remove('active');
-      });
-      
-      tabFileTree.addEventListener('click', () => {
-        tabFileTree.classList.add('active');
-        tabXmlInput.classList.remove('active');
-        fileTreeTab.classList.add('active');
-        xmlInputTab.classList.remove('active');
-        vscode.postMessage({ command: 'getFileTreeWithContents' });
-      });
-      
-      // XML Input Tab functionality
-      let globalChanges = [];
-      const prepareChangesButton = document.getElementById('prepareChanges');
-      const applyChangesButton = document.getElementById('applyChanges');
-      const cancelChangesButton = document.getElementById('cancelChanges');
-      const xmlInput = document.getElementById('xmlInput');
-      const changesContainer = document.getElementById('changesContainer');
-      const statusMessage = document.getElementById('statusMessage');
-      const successMessage = document.getElementById('successMessage');
-      const fixedButtonContainer = document.querySelector('.fixed-button-container');
-      const inputSection = document.getElementById('inputSection');
-      const toggleInputBtn = document.getElementById('toggleInputBtn');
-      let inputCollapsed = false;
-      
-      fixedButtonContainer.style.display = 'none';
-      
-      prepareChangesButton.addEventListener('click', () => {
-        const xml = xmlInput.value.trim();
-        if (!xml) {
-          statusMessage.textContent = "Please enter XML input.";
-          statusMessage.style.color = "red";
-          return;
-        }
-        statusMessage.textContent = "";
-        vscode.postMessage({
-          command: 'applyXml',
-          payload: xml
-        });
-        console.log("Sent 'applyXml' message to extension.");
-      });
-      
-      applyChangesButton.addEventListener('click', () => {
-        const selectedIndexes = globalChanges
-          .filter(change => change.selected)
-          .map(change => change.index);
-        vscode.postMessage({
-          command: 'confirmApply',
-          payload: { selectedIndexes }
-        });
-        console.log("Sent 'confirmApply' message to extension with selectedIndexes:", selectedIndexes);
-      });
-      
-      cancelChangesButton.addEventListener('click', () => {
-        const confirmCancel = confirm("Are you sure you want to cancel? All changes will be deleted.");
-        if (confirmCancel) {
-          vscode.postMessage({
-            command: 'cancelChanges'
-          });
-        }
-      });
-      
-      toggleInputBtn.addEventListener('click', () => {
-        inputCollapsed = !inputCollapsed;
-        if (inputCollapsed) {
-          inputSection.classList.remove('expanded');
-          inputSection.classList.add('collapsed');
-          toggleInputBtn.textContent = 'Show XML';
-        } else {
-          inputSection.classList.remove('collapsed');
-          inputSection.classList.add('expanded');
-          toggleInputBtn.textContent = 'Hide XML';
-        }
-      });
-      
-      window.addEventListener('message', event => {
-        const message = event.data;
-        console.log("Received message from extension:", message);
-        switch (message.command) {
-          case 'displayChanges':
-            displayChanges(message.payload);
-            successMessage.style.display = 'none';
-            if (message.payload.length > 0) {
-              fixedButtonContainer.style.display = 'block';
-            } else {
-              fixedButtonContainer.style.display = 'none';
-            }
-            if (message.payload.length > 0) {
-              inputSection.classList.remove('expanded');
-              inputSection.classList.add('collapsed');
-              inputCollapsed = true;
-              toggleInputBtn.style.display = 'inline-block';
-              toggleInputBtn.textContent = 'Show XML';
-            }
-            break;
-          case 'changesApplied':
-            successMessage.classList.add('visible');
-            fixedButtonContainer.style.display = 'none';
-            clearChanges();
-            inputSection.classList.remove('collapsed');
-            inputSection.classList.add('expanded');
-            toggleInputBtn.style.display = 'none';
-            xmlInput.value = "";
-            inputCollapsed = false;
-            break;
-          case 'clearChanges':
-            clearChanges();
-            fixedButtonContainer.style.display = 'none';
-            break;
-          case 'cancelChanges':
-            clearChanges();
-            fixedButtonContainer.style.display = 'none';
-            inputSection.classList.remove('collapsed');
-            inputSection.classList.add('expanded');
-            toggleInputBtn.style.display = 'none';
-            xmlInput.value = "";
-            successMessage.style.display = 'none';
-            break;
-          case 'fileTreeOutput':
-            // Updated file tree output handling using XML parsing
-            fileTreeData = parseFileTreeOutput(message.payload);
-            renderFileTree(fileTreeData);
-            break;
-          default:
-            console.warn("Unknown command:", message.command);
-        }
-      });
-      
-      function displayChanges(changes) {
-        changesContainer.innerHTML = '';
-        globalChanges = [];
-        if (changes.length === 0) {
-          changesContainer.textContent = "No changes to display.";
-          return;
-        }
-        const list = document.createElement('ul');
-        list.className = 'file-list';
-        changes.forEach((change, index) => {
-          globalChanges.push({
-            ...change,
-            index: index,
-            selected: true
-          });
-          const listItem = document.createElement('li');
-          listItem.className = 'file-item';
-          if (change.action === 'delete') {
-            listItem.classList.add('delete-item');
-          }
-          const filePath = document.createElement('div');
-          filePath.className = 'file-path';
-          filePath.textContent = change.filePath;
-          const description = document.createElement('div');
-          description.className = 'file-description';
-          description.textContent = `${change.action.toUpperCase()}: ${change.description}`;
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.className = 'change-checkbox';
-          checkbox.checked = true;
-          checkbox.addEventListener('click', (evt) => {
-            evt.stopPropagation();
-            globalChanges[index].selected = evt.target.checked;
-          });
-          listItem.appendChild(filePath);
-          listItem.appendChild(description);
-          listItem.appendChild(checkbox);
-          listItem.addEventListener('click', (evt) => {
-            if (evt.target === checkbox) return;
-            vscode.postMessage({
-              command: 'viewDiff',
-              payload: { index }
-            });
-          });
-          list.appendChild(listItem);
-        });
-        changesContainer.appendChild(list);
-      }
-      
-      function clearChanges() {
-        changesContainer.innerHTML = '';
-        globalChanges = [];
-        successMessage.classList.remove('visible');
-      }
-      
-    })();
-  </script>
+  <!-- Include external JS file -->
+  <script src="${webviewJsUri}" nonce="${nonce}"></script>
 </body>
 </html>

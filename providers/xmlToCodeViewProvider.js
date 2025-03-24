@@ -7,28 +7,18 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-// 1) Helper to convert ===...=== blocks to CDATA
-function convertTripleEqualsToCdata(xmlString) {
-  const contentRegex = /<content\b[^>]*>([\s\S]*?)<\/content>/gi;
-  return xmlString.replace(contentRegex, (match, inside) => {
-    const firstIdx = inside.indexOf("===");
-    const lastIdx = inside.lastIndexOf("===");
-
-    if (firstIdx !== -1 && lastIdx !== -1 && lastIdx > firstIdx) {
-      const before = inside.substring(0, firstIdx);
-      const code = inside.substring(firstIdx + 3, lastIdx);
-      const after = inside.substring(lastIdx + 3);
-
-      return `${before}${code}${after}`;
-    }
-
-    return match;
-  });
-}
+const {
+  convertTripleEqualsToCdata,
+  getNonce,
+  normalizeFilePath,
+  getWorkspaceUri,
+  getFileUri,
+  getFileContentFromUri,
+  getFileContent
+} = require("./xmlToCodeHelpers");
 
 /**
- * This class implements a WebviewViewProvider that displays our text area UI
- * where the user can paste XML instructions, which we then parse into code changes.
+ * This class implements the XML to Code View Provider.
  */
 class XmlToCodeViewProvider {
   constructor(context) {
@@ -37,19 +27,17 @@ class XmlToCodeViewProvider {
     this.pendingChanges = [];
   }
 
+  // --- Webview Setup and Message Handling ---
+
   resolveWebviewView(webviewView, _context, _token) {
     this._view = webviewView;
-
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.context.extensionUri],
     };
 
-    const nonce = this.getNonce();
-    webviewView.webview.html = this.getWebviewContent(
-      webviewView.webview,
-      nonce
-    );
+    const nonce = getNonce();
+    webviewView.webview.html = this.getWebviewContent(webviewView.webview, nonce);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
@@ -61,71 +49,55 @@ class XmlToCodeViewProvider {
               payload: this.pendingChanges,
             });
           } catch (err) {
-            vscode.window.showErrorMessage(
-              "Error preparing XML modifications: " + err.message
-            );
+            vscode.window.showErrorMessage("Error preparing XML modifications: " + err.message);
           }
           break;
-
         case "confirmApply":
           try {
-            const selectedIndexes =
-              (message.payload && message.payload.selectedIndexes) || [];
+            const selectedIndexes = (message.payload && message.payload.selectedIndexes) || [];
             await this.applyPendingChanges(selectedIndexes);
             webviewView.webview.postMessage({ command: "changesApplied" });
           } catch (err) {
-            vscode.window.showErrorMessage(
-              "Error applying XML modifications: " + err.message
-            );
+            vscode.window.showErrorMessage("Error applying XML modifications: " + err.message);
           }
           break;
-
         case "previewChanges":
           try {
             await vscode.commands.executeCommand("xmlToCode.previewChanges");
           } catch (err) {
-            vscode.window.showErrorMessage(
-              "Error previewing changes: " + err.message
-            );
+            vscode.window.showErrorMessage("Error previewing changes: " + err.message);
           }
           break;
-
         case "viewDiff":
           try {
             const { index } = message.payload;
             await this.viewDiff(index);
           } catch (err) {
-            vscode.window.showErrorMessage(
-              "Error viewing diff: " + err.message
-            );
+            vscode.window.showErrorMessage("Error viewing diff: " + err.message);
           }
           break;
-
         case "cancelChanges":
           this.pendingChanges = [];
           webviewView.webview.postMessage({ command: "clearChanges" });
           break;
-
-        case "getFileTreeWithContents":
+        case "getFileTree":
           try {
-            const workspaceUri = this.getWorkspaceUri();
-            if (!workspaceUri) {
-              vscode.window.showErrorMessage("No workspace found.");
-              return;
-            }
-            const workspacePath = workspaceUri.fsPath;
-            const { treeStr, fileBlocks } =
-              this.generateFileTreeWithContents(workspacePath);
-            const output = `<file_map>\n${treeStr}\n</file_map>\n${fileBlocks}`;
-        
+            const fileTree = await this.getWorkspaceFileTree();
             webviewView.webview.postMessage({
-              command: "fileTreeOutput",
-              payload: output,
+              command: "displayFileTree",
+              payload: fileTree
             });
           } catch (err) {
-            vscode.window.showErrorMessage(
-              "Error generating file tree: " + err.message
-            );
+            vscode.window.showErrorMessage("Error getting file tree: " + err.message);
+          }
+          break;
+        case "copyFileTreeOutput":
+          try {
+            const { instructions } = message.payload;
+            await this.copyFileTreeAsXml(instructions);
+            webviewView.webview.postMessage({ command: "fileTreeOutputCopied" });
+          } catch (err) {
+            vscode.window.showErrorMessage("Error copying file tree output: " + err.message);
           }
           break;
         default:
@@ -134,7 +106,7 @@ class XmlToCodeViewProvider {
     });
   }
 
-  getWebviewContent(_webview, nonce) {
+  getWebviewContent(webview, nonce) {
     const htmlPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       "providers",
@@ -142,29 +114,43 @@ class XmlToCodeViewProvider {
       "webview.html"
     );
     let html = fs.readFileSync(htmlPath.fsPath, "utf8");
+
+    // Generate URI for external JS file
+    const jsPath = vscode.Uri.joinPath(this.context.extensionUri, "providers", "webview", "webview.js");
+    const webviewJsUri = webview.asWebviewUri(jsPath);
+    
+    // Generate URI for external CSS file
+    const cssPath = vscode.Uri.joinPath(this.context.extensionUri, "providers", "webview", "webview.css");
+    const webviewCssUri = webview.asWebviewUri(cssPath);
+    
+    console.log("JS Path:", jsPath);
+    console.log("JS URI for webview:", webviewJsUri);
+    console.log("CSS Path:", cssPath);
+    console.log("CSS URI for webview:", webviewCssUri);
+    console.log("Webview CSP Source:", webview.cspSource);
+
+    // Replace placeholders with actual values
     html = html.replace(/\${nonce}/g, nonce);
+    html = html.replace(/\${webviewJsUri}/g, webviewJsUri.toString());
+    html = html.replace(/\${webviewCssUri}/g, webviewCssUri.toString());
+    html = html.replace(/\${cspSource}/g, webview.cspSource);
+    
+    // Log the final HTML content to debug loading issues
+    console.log("Final HTML content with replaced URIs:", html);
+    
     return html;
   }
 
-  getNonce() {
-    let text = "";
-    const possible =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 32; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-  }
-
+  // --- XML Parsing and Modification Preparation ---
   async prepareXmlModifications(xmlInput) {
     if (!xmlInput) {
       vscode.window.showErrorMessage("No XML input provided.");
       return;
     }
 
+    // Convert triple-equals blocks and wrap with a root element
     let processedXml = convertTripleEqualsToCdata(xmlInput);
-    processedXml = `${processedXml}`;
-
+    processedXml = `<changes>${processedXml}</changes>`;
     console.log("Processed XML after wrapping:", processedXml);
 
     let xmlDoc;
@@ -192,36 +178,23 @@ class XmlToCodeViewProvider {
 
     this.pendingChanges = [];
     const fileNodes = xmlDoc.getElementsByTagName("file");
-    console.log("Number of  nodes found:", fileNodes.length);
+    console.log("Number of <file> nodes found:", fileNodes.length);
 
     if (!fileNodes || fileNodes.length === 0) {
-      vscode.window.showWarningMessage("No  nodes found in XML.");
+      vscode.window.showWarningMessage("No <file> nodes found in XML.");
     }
 
     for (let i = 0; i < fileNodes.length; i++) {
       const fileNode = fileNodes.item(i);
       let filePath = fileNode.getAttribute("path");
       let action = fileNode.getAttribute("action");
+      if (!filePath || !action) continue;
 
-      if (!filePath || !action) {
-        continue;
-      }
-
-      filePath = this.normalizeFilePath(filePath);
+      filePath = normalizeFilePath(filePath);
       const changeNodes = fileNode.getElementsByTagName("change");
 
       if (action === "delete") {
-        let beforeContent = "";
-        try {
-          const workspaceUri = this.getWorkspaceUri();
-          if (workspaceUri) {
-            const fileUri = this.getFileUri(workspaceUri, filePath);
-            beforeContent = await this.getFileContentFromUri(fileUri);
-          }
-        } catch (err) {
-          beforeContent = "";
-        }
-
+        const beforeContent = await this.getBeforeContent(filePath);
         this.pendingChanges.push({
           filePath,
           action: "delete",
@@ -238,23 +211,11 @@ class XmlToCodeViewProvider {
             description = descNodes.item(0).textContent.trim();
           }
           const contentNodes = changeNode.getElementsByTagName("content");
-          if (!contentNodes || !contentNodes.length) {
-            continue;
-          }
+          if (!contentNodes || !contentNodes.length) continue;
           let rawCode = contentNodes.item(0).textContent.trim();
 
           if (action === "rewrite" && !rawCode) {
-            action = "delete";
-            let beforeContent = "";
-            try {
-              const workspaceUri = this.getWorkspaceUri();
-              if (workspaceUri) {
-                const fileUri = this.getFileUri(workspaceUri, filePath);
-                beforeContent = await this.getFileContentFromUri(fileUri);
-              }
-            } catch (err) {
-              beforeContent = "";
-            }
+            const beforeContent = await this.getBeforeContent(filePath);
             this.pendingChanges.push({
               filePath,
               action: "delete",
@@ -270,8 +231,7 @@ class XmlToCodeViewProvider {
               filePath,
               action,
               description,
-              before:
-                action === "rewrite" ? await this.getFileContent(filePath) : "",
+              before: action === "rewrite" ? await getFileContent(filePath) : "",
               after: rawCode,
             });
           }
@@ -280,66 +240,30 @@ class XmlToCodeViewProvider {
     }
 
     if (this.pendingChanges.length === 0) {
-      vscode.window.showWarningMessage(
-        "No valid changes were parsed from the XML."
-      );
+      vscode.window.showWarningMessage("No valid changes were parsed from the XML.");
       return;
     }
-
-    vscode.window.showInformationMessage(
-      "XML modifications prepared. Please review the changes."
-    );
+    vscode.window.showInformationMessage("XML modifications prepared. Please review the changes.");
   }
 
-  normalizeFilePath(filePath) {
-    if (path.isAbsolute(filePath)) {
-      return path.normalize(filePath);
-    }
-    if (!filePath.startsWith("./") && !filePath.startsWith("../")) {
-      filePath = `./${filePath}`;
-    }
-    return path.normalize(filePath);
-  }
-
-  getWorkspaceUri() {
-    if (
-      vscode.workspace.workspaceFolders &&
-      vscode.workspace.workspaceFolders.length > 0
-    ) {
-      return vscode.workspace.workspaceFolders[0].uri;
-    }
-    vscode.window.showErrorMessage("No workspace folder is open.");
-    return null;
-  }
-
-  getFileUri(workspaceUri, filePath) {
-    if (path.isAbsolute(filePath)) {
-      return vscode.Uri.file(filePath);
-    }
-    return vscode.Uri.joinPath(workspaceUri, filePath);
-  }
-
-  async getFileContentFromUri(fileUri) {
+  /**
+   * Helper to retrieve the current content of a file.
+   */
+  async getBeforeContent(filePath) {
+    let beforeContent = "";
     try {
-      const fileData = await vscode.workspace.fs.readFile(fileUri);
-      return new TextDecoder().decode(fileData);
-    } catch (err) {
-      return "";
-    }
-  }
-
-  async getFileContent(filePath) {
-    try {
-      const workspaceUri = this.getWorkspaceUri();
-      if (!workspaceUri) {
-        return "";
+      const workspaceUri = getWorkspaceUri();
+      if (workspaceUri) {
+        const fileUri = getFileUri(workspaceUri, filePath);
+        beforeContent = await getFileContentFromUri(fileUri);
       }
-      const fileUri = this.getFileUri(workspaceUri, filePath);
-      return await this.getFileContentFromUri(fileUri);
     } catch (err) {
-      return "";
+      beforeContent = "";
     }
+    return beforeContent;
   }
+
+  // --- Diff and Change Application Methods ---
 
   async viewDiff(index) {
     if (index < 0 || index >= this.pendingChanges.length) {
@@ -348,28 +272,28 @@ class XmlToCodeViewProvider {
     }
     const change = this.pendingChanges[index];
     const { filePath, before, after } = change;
-    const workspaceUri = this.getWorkspaceUri();
-    if (!workspaceUri) {
-      return;
-    }
+    const workspaceUri = getWorkspaceUri();
+    if (!workspaceUri) return;
+
     const tempDir = path.join(os.tmpdir(), `xml-to-code-diff-${Date.now()}`);
     fs.mkdirSync(tempDir, { recursive: true });
+
     const originalFileName = `original_${path.basename(filePath)}`;
     const tempOrigPath = path.join(tempDir, originalFileName);
     fs.writeFileSync(tempOrigPath, before, "utf8");
     const tempOrigUri = vscode.Uri.file(tempOrigPath);
+
     const modifiedFileName = `modified_${path.basename(filePath)}`;
     const tempModPath = path.join(tempDir, modifiedFileName);
     fs.writeFileSync(tempModPath, after, "utf8");
     const tempModUri = vscode.Uri.file(tempModPath);
+
     try {
       await vscode.commands.executeCommand(
         "vscode.diff",
         tempOrigUri,
         tempModUri,
-        `${path.basename(filePath)} (Original) ↔ ${path.basename(
-          filePath
-        )} (Modified)`
+        `${path.basename(filePath)} (Original) ↔ ${path.basename(filePath)} (Modified)`
       );
     } catch (error) {
       vscode.window.showErrorMessage("Failed to open diff view.");
@@ -377,15 +301,11 @@ class XmlToCodeViewProvider {
   }
 
   async applyPendingChanges(selectedIndexes) {
-    const changesToApply = this.pendingChanges.filter((_, i) =>
-      selectedIndexes.includes(i)
-    );
-
+    const changesToApply = this.pendingChanges.filter((_, i) => selectedIndexes.includes(i));
     if (!changesToApply.length) {
       vscode.window.showInformationMessage("No changes selected to apply.");
       return;
     }
-
     for (const change of changesToApply) {
       const { filePath, action, after } = change;
       if (action === "delete") {
@@ -399,47 +319,88 @@ class XmlToCodeViewProvider {
   }
 
   async deleteFile(filePath) {
-    const workspaceUri = this.getWorkspaceUri();
-    if (!workspaceUri) {
-      return;
-    }
-    const fileUri = this.getFileUri(workspaceUri, filePath);
+    const workspaceUri = getWorkspaceUri();
+    if (!workspaceUri) return;
+    const fileUri = getFileUri(workspaceUri, filePath);
     try {
       await vscode.workspace.fs.delete(fileUri);
       vscode.window.showInformationMessage(`Deleted file: ${filePath}`);
     } catch (err) {
-      vscode.window.showErrorMessage(
-        `Failed to delete file ${filePath}: ${err.message}`
-      );
+      vscode.window.showErrorMessage(`Failed to delete file ${filePath}: ${err.message}`);
     }
   }
-
-  generateFileTreeWithContents(dir, prefix = "") {
-    let treeStr = "";
-    let fileBlocks = "";
-    const items = fs.readdirSync(dir).sort();
   
-    items.forEach((item, index) => {
-      const fullPath = path.join(dir, item);
-      const isLast = index === items.length - 1;
-      const branch = isLast ? "└── " : "├── ";
-      treeStr += prefix + branch + item + "\n";
+  /**
+   * Get the file tree of the workspace
+   */
+  async getWorkspaceFileTree() {
+    const workspaceUri = getWorkspaceUri();
+    if (!workspaceUri) {
+      vscode.window.showErrorMessage("No workspace folder is open");
+      return [];
+    }
+    
+    try {
+      // Get all files in the workspace
+      const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+      
+      // Convert to a format suitable for the webview
+      return files.map(file => {
+        const relativePath = vscode.workspace.asRelativePath(file);
+        return {
+          path: relativePath,
+          selected: false
+        };
+      }).sort((a, b) => a.path.localeCompare(b.path));
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to get file tree: ${err.message}`);
+      return [];
+    }
+  }
   
-      if (fs.statSync(fullPath).isDirectory()) {
-        const newPrefix = prefix + (isLast ? "    " : "│   ");
-        const result = this.generateFileTreeWithContents(fullPath, newPrefix);
-        treeStr += result.treeStr;
-        fileBlocks += result.fileBlocks;
-      } else {
-        fileBlocks += ""; // simplified for debugging
+  /**
+   * Copy the selected files from the file tree as XML
+   */
+  async copyFileTreeAsXml(instructions) {
+    const workspaceUri = getWorkspaceUri();
+    if (!workspaceUri) return;
+    
+    try {
+      // Get all files in the workspace
+      const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+      
+      // Generate XML for selected files
+      let xml = `<changes>\n`;
+      
+      // Add instructions if provided
+      if (instructions) {
+        xml += `  <instructions>\n    ${instructions}\n  </instructions>\n`;
       }
-    });
-  
-    console.log({ treeStr, fileBlocks }); // IMPORTANT: Check your extension logs
-    return { treeStr, fileBlocks };
+      
+      // Add files
+      for (const file of files) {
+        const relativePath = vscode.workspace.asRelativePath(file);
+        const content = await getFileContentFromUri(file);
+        
+        xml += `  <file path="${relativePath}" action="rewrite">\n`;
+        xml += `    <change>\n`;
+        xml += `      <description>File content</description>\n`;
+        xml += `      <content>===\n${content}\n===</content>\n`;
+        xml += `    </change>\n`;
+        xml += `  </file>\n`;
+      }
+      
+      xml += `</changes>`;
+      
+      // Copy to clipboard
+      await vscode.env.clipboard.writeText(xml);
+      vscode.window.showInformationMessage("File tree XML copied to clipboard");
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to copy file tree as XML: ${err.message}`);
+    }
   }
 }
 
 module.exports = {
-  XmlToCodeViewProvider,
+  XmlToCodeViewProvider
 };

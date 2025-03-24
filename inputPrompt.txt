@@ -347,10 +347,6 @@ File: providers/webview/webview.html
   </div>
 
   <footer>
-    made to use together with:
-    <a href="https://repoprompt.com" target="_blank">Repo Prompt</a>
-    <br /> <small>use the XML Whole prompt</small>
-
     <br /><br />
     Extension is made with ❤️ by Tim van de Vathorst -
     <a href="https://github.com/Timvdv/xml-to-code" target="_blank">GitHub</a> |
