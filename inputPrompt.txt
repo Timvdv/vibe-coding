@@ -314,7 +314,7 @@ File: providers/webview/webview.html
     <h2>Paste your XML</h2>
     <p class="description">
       These should be the XML changes that are the output from the LLM that you're using.
-      Formatted like <a href="https://repoprompt.com" target="_blank">this</a>
+      Formatted like <a href="https://github.com/Timvdv/xml-to-code/blob/main/inputPrompt.txt" target="_blank">this</a>
     </p>
 
     <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>

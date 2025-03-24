@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>XML to Code</title>
+  <title>XML to Code Converter</title>
   <!-- Updated CSP meta tag to allow external CSS/JS via webview.cspSource -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource}; img-src ${cspSource};">  
   <!-- Include external CSS file -->
@@ -137,11 +137,11 @@
     }
 
     .file-item {
-        padding: 8px;
-        margin-bottom: 5px;
+        padding: 2px 4px;
+        margin-bottom: 2px;
         background-color: var(--vscode-editor-background);
         border: 1px solid var(--vscode-editorWidget-border);
-        border-radius: 4px;
+        border-radius: 2px;
         cursor: pointer;
         transition: background-color 0.2s ease;
         display: flex;
@@ -172,8 +172,8 @@
 
     .change-checkbox {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 4px;
+        right: 4px;
         transform: scale(1.2);
         cursor: pointer;
     }
@@ -339,7 +339,7 @@
       <h2>Paste your XML</h2>
       <p class="description">
         These should be the XML changes that are the output from the LLM that you're using.
-        Formatted like <a href="https://repoprompt.com" target="_blank">this</a>
+        Formatted like <a href="https://github.com/Timvdv/xml-to-code/blob/main/inputPrompt.txt" target="_blank">this</a>
       </p>
       <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
       <div class="button-container">
@@ -365,6 +365,9 @@
   <div id="fileTreeTab" class="tab-content">
     <h2>File Tree Overview</h2>
     <p class="description">Select files to include in the copied XML output and add any additional instructions below.</p>
+    <div class="select-all-container">
+      <button id="toggleSelectAll" class="select-all-button">Select All</button>
+    </div>
     <div id="fileTreeList"></div>
     <textarea id="instructions" placeholder="Enter additional instructions to include..."></textarea>
     <div class="button-container">
@@ -374,8 +377,8 @@
   
   <footer>
     Extension is made with ❤️ by Tim van de Vathorst -
-    <a href="https://github.com/Timvdv/xml-to-code" target="_blank">GitHub</a> |
-    <a href="https://www.paypal.me/timvandevathorst" target="_blank">Donate</a>
+    <a href="https://github.com/Timvdv/xml-to-code" target="_blank">View on GitHub</a> |
+    <a href="https://www.paypal.me/timvandevathorst" target="_blank">Support this Project</a>
   </footer>
   
   <!-- Include external JS file -->
