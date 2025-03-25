@@ -16,13 +16,13 @@ Easily create code changes from LLM outputs with a streamlined workflow
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/Timvdv/xml-to-code
+   git clone https://github.com/Timvdv/vibe-coding
    ```
 
 2. **Navigate to the Extension Directory:**
 
    ```bash
-   cd xml-to-code
+   cd vibe-coding
    ```
 
 3. **Install Dependencies:**
@@ -131,5 +131,5 @@ Made to use together with:
 - Use the **XML Whole** prompt for best results.
 
 Extension is made with ❤️ by Tim van de Vathorst\
-[GitHub](https://github.com/Timvdv/xml-to-code) | [Donate](https://www.paypal.me/timvandevathorst)
+[GitHub](https://github.com/Timvdv/vibe-coding) | [Donate](https://www.paypal.me/timvandevathorst)
 

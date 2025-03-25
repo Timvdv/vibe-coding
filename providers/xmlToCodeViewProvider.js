@@ -365,7 +365,7 @@ class XmlToCodeViewProvider {
     const workspaceUri = getWorkspaceUri();
     if (!workspaceUri) return;
 
-    const tempDir = path.join(os.tmpdir(), `xml-to-code-diff-${Date.now()}`);
+    const tempDir = path.join(os.tmpdir(), `vibe-coding-diff-${Date.now()}`);
     fs.mkdirSync(tempDir, { recursive: true });
 
     const originalFileName = `original_${path.basename(filePath)}`;
@@ -779,7 +779,7 @@ class XmlToCodeViewProvider {
       xml += `</changes>`;
       
       // Write XML to a temporary file
-      const tempDir = path.join(os.tmpdir(), 'xml-to-code');
+      const tempDir = path.join(os.tmpdir(), 'vibe-coding');
       fs.mkdirSync(tempDir, { recursive: true });
       const tempFile = path.join(tempDir, `clipboard-${Date.now()}.xml`);
       fs.writeFileSync(tempFile, xml, 'utf8');

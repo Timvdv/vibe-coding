@@ -2,7 +2,7 @@
   "name": "vibe-coding",
   "displayName": "vibe coding",
   "description": "Easily create code changes from LLM outputs",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.96.0"
   },
@@ -66,7 +66,7 @@
   "publisher": "TimvandeVathorst",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Timvdv/xml-to-code"
+    "url": "https://github.com/Timvdv/vibe-coding"
   },
   "keywords": [
     "vibe coding",
