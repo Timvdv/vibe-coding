@@ -1,7 +1,7 @@
 {
-  "name": "xml-to-code",
-  "displayName": "xml-to-code",
-  "description": "repoparser xml-whole to code changes",
+  "name": "vibe-coding",
+  "displayName": "vibe coding",
+  "description": "Easily create code changes from LLM outputs",
   "version": "0.0.3",
   "engines": {
     "vscode": "^1.96.0"
@@ -10,38 +10,38 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:xmlToCodeView",
-    "onCommand:xmlToCode.openView",
-    "onCommand:xmlToCode.previewChanges",
-    "onCommand:xmlToCode.viewDiff"
+    "onView:vibeCodingView",
+    "onCommand:vibeCoding.openView",
+    "onCommand:vibeCoding.previewChanges",
+    "onCommand:vibeCoding.viewDiff"
   ],
   "main": "./extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "xmlToCodeSidebar",
-          "title": "XML to Code",
+          "id": "vibeCodingSidebar",
+          "title": "Vibe Coding",
           "icon": "images/icon.svg"
         }
       ]
     },
     "views": {
-      "xmlToCodeSidebar": [
+      "vibeCodingSidebar": [
         {
           "type": "webview",
-          "id": "xmlToCodeView",
-          "name": "XML to Code"
+          "id": "vibeCodingView",
+          "name": "Vibe Coding"
         }
       ]
     },
     "commands": [
       {
-        "command": "xmlToCode.openView",
-        "title": "Open XML to Code View"
+        "command": "vibeCoding.openView",
+        "title": "Open Vibe Coding View"
       },
       {
-        "command": "xmlToCode.viewDiff",
+        "command": "vibeCoding.viewDiff",
         "title": "View Diff"
       }
     ]
@@ -60,6 +60,7 @@
     "eslint": "^9.16.0"
   },
   "dependencies": {
+    "ignore": "^7.0.3",
     "xmldom": "^0.6.0"
   },
   "publisher": "TimvandeVathorst",
@@ -68,6 +69,7 @@
     "url": "https://github.com/Timvdv/xml-to-code"
   },
   "keywords": [
+    "vibe coding",
     "XML to code",
     "RepoPrompt",
     "LLM parser"

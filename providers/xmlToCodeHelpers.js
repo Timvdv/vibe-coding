@@ -9,12 +9,12 @@ function convertTripleEqualsToCdata(xmlString) {
   const contentRegex = /<content\b[^>]*>([\s\S]*?)<\/content>/gi;
   return xmlString.replace(contentRegex, (match, inside) => {
     const firstIdx = inside.indexOf("===");
-    const lastIdx = inside.lastIndexOf("");
+    const lastIdx = inside.lastIndexOf("===");
     if (firstIdx !== -1 && lastIdx !== -1 && lastIdx > firstIdx) {
       const before = inside.substring(0, firstIdx);
       const code = inside.substring(firstIdx + 3, lastIdx);
       const after = inside.substring(lastIdx + 3);
-      return `${before}${code}${after}`;
+      return `<content><![CDATA[${code}]]></content>`;
     }
     return match;
   });

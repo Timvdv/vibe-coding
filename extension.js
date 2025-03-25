@@ -7,7 +7,7 @@ const { XmlToCodeViewProvider } = require("./providers/xmlToCodeViewProvider");
  * Extension activation: register our WebviewViewProvider so it appears in the sidebar.
  */
 function activate(context) {
-  console.log("Activating xml-to-code extension.");
+  console.log("Activating vibe-coding extension.");
   const provider = new XmlToCodeViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -18,24 +18,24 @@ function activate(context) {
   );
   console.log("WebviewViewProvider registered successfully.");
 
-  // Register command to open the XML to Code view
-  const openViewCommand = vscode.commands.registerCommand('xmlToCode.openView', () => {
-    console.log("Executing command 'xmlToCode.openView'.");
-    vscode.commands.executeCommand('workbench.view.extension.xmlToCodeSidebar');
+  // Register command to open the Vibe Coding view
+  const openViewCommand = vscode.commands.registerCommand('vibeCoding.openView', () => {
+    console.log("Executing command 'vibeCoding.openView'.");
+    vscode.commands.executeCommand('workbench.view.extension.vibeCodingSidebar');
   });
   context.subscriptions.push(openViewCommand);
 
   // Register command to view diffs
-  const viewDiffCommand = vscode.commands.registerCommand('xmlToCode.viewDiff', async (index) => {
-    console.log("Executing command 'xmlToCode.viewDiff' with index:", index);
+  const viewDiffCommand = vscode.commands.registerCommand('vibeCoding.viewDiff', async (index) => {
+    console.log("Executing command 'vibeCoding.viewDiff' with index:", index);
     const providerInstance = getProviderInstance(context);
     await providerInstance.viewDiff(index);
   });
   context.subscriptions.push(viewDiffCommand);
 
-  // Automatically reveal the XML to Code view upon activation
-  vscode.commands.executeCommand('xmlToCode.openView');
-  console.log("XML to Code view has been opened programmatically.");
+  // Automatically reveal the Vibe Coding view upon activation
+  vscode.commands.executeCommand('vibeCoding.openView');
+  console.log("Vibe Coding view has been opened programmatically.");
 }
 
 /**
@@ -53,7 +53,7 @@ function getProviderInstance(context) {
  * Deactivate function.
  */
 function deactivate() {
-  console.log("Deactivating xml-to-code extension.");
+  console.log("Deactivating vibe-coding extension.");
 }
 
 module.exports = {

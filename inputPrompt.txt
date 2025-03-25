@@ -149,7 +149,6 @@ File: providers/webview/webview.html
         padding: 8px;
         margin-bottom: 5px;
         background-color: var(--vscode-editor-background);
-        border: 1px solid var(--vscode-editorWidget-border);
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.2s ease;

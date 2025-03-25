@@ -1,11 +1,12 @@
-# xml-to-code
+# vibe coding
 
-Used to parse LLM XML output to code changes
+Easily create code changes from LLM outputs with a streamlined workflow
 
 ## Features
 
-- **XML Parsing:** Easily input XML instructions and parse them into structured code modifications.
-- **Webview Interface:** Intuitive UI within VS Code for managing and applying code changes.
+- **File Tree Exploration:** Select files from your workspace to include in context for your AI.
+- **XML Generation:** Generate structured XML of selected files to send to your LLM.
+- **Code Application:** Apply code changes received from your LLM with a preview of what will change.
 - **Diff Viewer:** Preview differences before applying changes to ensure accuracy.
 
 ---
@@ -43,28 +44,35 @@ Used to parse LLM XML output to code changes
 
 ## Usage
 
-1. **Open XML to Code View:**
+1. **Open Vibe Coding View:**
 
-   - Click on the **XML to Code** icon in the activity bar.
-   - Alternatively, use the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and execute `Open XML to Code View`.
+   - Click on the **Vibe Coding** icon in the activity bar.
+   - Alternatively, use the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac) and execute `Open Vibe Coding View`.
 
-2. **Input XML Instructions:**
+2. **Step 1: Select Files**
+   
+   - On the File Tree tab, select the files you want your LLM to understand.
+   - Add any specific instructions in the text area.
+   - Click **Copy XML Output** to copy the file tree as XML.
+   - Paste this into your LLM along with your coding request.
 
-   - Paste your XML-formatted instructions into the provided textarea.
-   - Ensure the XML follows the required schema for accurate parsing.
+3. **Step 2: Apply Changes**
 
-3. **Prepare Changes:**
+   - After receiving the response from your LLM, go to the XML Input tab.
+   - Paste the XML response from your LLM into the text area.
+   - Click **Prepare Changes** to parse the XML and generate a list of pending code changes.
+   - Review the listed changes and click **Apply Changes** to execute them.
 
-   - Click the **Prepare Changes** button to parse the XML and generate a list of pending code changes.
+---
 
-4. **Review Changes:**
+## Example Workflow
 
-   - Review the list of changes in the **Changes** section.
-   - Click on individual changes to view diffs and ensure they meet your requirements.
-
-5. **Apply Changes:**
-
-   - Once satisfied, click the **Apply Changes** button to execute the modifications in your workspace.
+1. **Select relevant files** in the File Tree tab
+2. **Copy the XML output** and send to your LLM with instructions like:
+   "Please modify the login functionality to include email validation"
+3. **Copy the XML response** from your LLM
+4. **Paste the response** in the XML Input tab
+5. **Review and apply** the changes
 
 ---
 

@@ -76,6 +76,10 @@ h2 {
     color: var(--vscode-button-foreground, #ffffff);
 }
 
+h2.title {
+    color: var(--vscode-editor-foreground, #ffffff);
+}
+
 p.description {
     margin-bottom: 12px;
     font-size: 0.85em;
@@ -140,10 +144,13 @@ button:hover {
 
 .file-list {
     list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+    font-family: var(--vscode-editor-font-family, monospace);
 }
 
 .file-item, .directory-item {
-    margin-bottom: 2px;
+    margin-bottom: 1px;
     cursor: pointer;
     position: relative;
 }
@@ -167,47 +174,55 @@ button:hover {
     background-color: var(--vscode-button-hoverBackground, #1177bb);
 }
 
-/* Make file tree more compact */
+/* Make file tree more native looking */
 .item-container {
     padding: 2px 4px;
-    margin-bottom: 1px;
-    background-color: var(--vscode-editor-background, #252526);
-    border: 1px solid var(--vscode-editorWidget-border, #454545);
-    border-radius: 2px;
-    transition: background-color 0.2s ease;
     display: flex;
     align-items: center;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    transition: background-color 0.15s ease;
 }
 
 .children-container {
-    padding-left: 12px;
-    margin-top: 1px;
+    padding-left: 16px;
+    border-left: 1px dotted var(--vscode-editorWidget-border, #454545);
+    margin-left: 5px;
 }
 
-/* Make expand/collapse icons smaller */
+/* Make expand/collapse icons more subtle */
 .expand-icon {
     width: 12px;
     height: 12px;
     line-height: 12px;
     font-size: 9px;
-    margin-right: 3px;
+    margin-right: 4px;
+    color: var(--vscode-editorWidget-border);
+    background-color: transparent;
+    box-shadow: none;
 }
 
 .file-spacer {
     width: 12px;
-    margin-right: 3px;
+    margin-right: 4px;
 }
 
 .item-container:hover {
-    background-color: var(--vscode-button-hoverBackground, #1177bb);
-    border-color: var(--vscode-button-hoverBackground, #1177bb);
+    background-color: var(--vscode-list-hoverBackground, rgba(90, 93, 94, 0.31));
+    border-color: transparent;
 }
 
 /* Directory specific styles */
 .directory-item > .item-container {
-    background-color: var(--vscode-editor-background, #2d2d2d);
+    background-color: transparent;
     font-weight: 600;
+}
+
+/* File specific styles - make them similar to directories */
+.file-item > .item-container {
+    background-color: transparent;
+    font-weight: 500; /* Slightly lighter than directories */
 }
 
 .directory-name {
@@ -219,67 +234,58 @@ button:hover {
 /* Expand/collapse icons */
 .expand-icon {
     display: inline-block;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     text-align: center;
-    line-height: 16px;
-    margin-right: 5px;
+    line-height: 14px;
+    margin-right: 4px;
     cursor: pointer;
     user-select: none;
-    color: var(--vscode-button-foreground, #ffffff);
-    font-weight: bold;
-    transition: transform 0.2s ease;
-    background-color: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    color: var(--vscode-editorWidget-border);
+    font-weight: normal;
+    transition: color 0.2s ease;
 }
 
 .expand-icon:hover {
-    background-color: rgba(255, 255, 255, 0.4);
-    transform: scale(1.1);
+    color: var(--vscode-editor-foreground);
+    background-color: transparent;
+    transform: none;
 }
 
 .file-spacer {
     display: inline-block;
-    width: 16px;
-    margin-right: 5px;
+    width: 14px;
+    position: relative;
+    margin-right: 4px;
+    opacity: 0.7;
 }
 
 /* Children container */
 .children-container {
-    padding-left: 20px;
+    padding-left: 16px;
     transition: height 0.2s ease-out;
-    margin-top: 2px;
     display: block; /* Ensure children containers are visible when expanded */
 }
 
-/* Highlight DELETE actions */
-.delete-item {
-    background-color: rgba(255, 0, 0, 0.15); /* slightly brighter red */
-    border: 1px solid rgba(255, 0, 0, 0.4);
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.2);
-}
-
-.file-path {
-    font-size: 0.75em;
-    color: var(--vscode-editorWidget-border, #cccccc);
-    margin-bottom: 1px;
-    font-weight: 500;
-}
-
-.file-description {
-    font-size: 0.95em;
+/* File item specific styling */
+.file-list .file-item .item-container .file-path {
+    font-size: 0.9em;         /* Match directory-name font size */
     color: var(--vscode-editor-foreground, #ffffff);
-    font-weight: 500;
+    margin-right: auto;
+    white-space: nowrap;
+    overflow: hidden; 
+    text-overflow: ellipsis;
+    opacity: 0.9;             /* Slightly less prominent than directories */
 }
 
 .change-checkbox {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    transform: scale(1.2);
+    margin-left: 4px;
+    position: relative;
+    top: 0;
+    right: 0;
+    transform: scale(1);
     cursor: pointer;
-    accent-color: var(--vscode-button-background, #0e639c);
+    accent-color: var(--vscode-checkbox-background);
     opacity: 0.9;
 }
 
@@ -410,4 +416,60 @@ footer a:hover {
 
 #cancelChanges:hover {
     background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Highlight DELETE actions */
+.delete-item {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+/* General file description style for changes list */
+.file-description {
+    font-size: 0.95em;
+    color: var(--vscode-editor-foreground, #ffffff);
+    font-weight: 500;
+}
+
+.footer-button {
+    color: var(--vscode-editor-foreground, #ffffff);
+    background-color: transparent;
+    margin-left: 0;
+    padding: 0;
+}
+
+/* Add styles for the biggest files section */
+.tree-separator {
+  margin-top: 20px;
+  padding: 5px;
+  font-weight: bold;
+  background-color: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+  color: var(--vscode-editor-foreground);
+}
+
+.biggest-files-list {
+  margin-top: 5px;
+  margin-bottom: 20px;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-editorWidget-border);
+  padding: 5px;
+  border-radius: 3px;
+}
+
+.file-full-path {
+  font-size: 0.75em;
+  color: var(--vscode-editorWidget-border);
+  opacity: 0.8;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.biggest-files-list .item-container {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 4px;
 }

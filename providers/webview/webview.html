@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>XML to Code Converter</title>
+  <title>Vibe Coding</title>
   <!-- Updated CSP meta tag to allow external CSS/JS via webview.cspSource -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${cspSource}; script-src 'nonce-${nonce}' ${cspSource}; img-src ${cspSource};">  
   <!-- Include external CSS file -->
@@ -140,7 +140,6 @@
         padding: 2px 4px;
         margin-bottom: 2px;
         background-color: var(--vscode-editor-background);
-        border: 1px solid var(--vscode-editorWidget-border);
         border-radius: 2px;
         cursor: pointer;
         transition: background-color 0.2s ease;
@@ -176,6 +175,17 @@
         right: 4px;
         transform: scale(1.2);
         cursor: pointer;
+    }
+
+    /************************************************************
+     * Token Counter
+     ************************************************************/
+    .token-counter {
+        margin: 10px 0;
+        padding: 5px;
+        font-size: 0.9em;
+        color: var(--vscode-editor-foreground);
+        text-align: right;
     }
 
     /************************************************************
@@ -329,19 +339,42 @@
 <body>
   <!-- Tab Navigation -->
   <div class="tab-buttons">
-    <button id="tabXmlInput" class="tab-button active">XML Input</button>
-    <button id="tabFileTree" class="tab-button">File Tree</button>
+    <button id="tabFileTree" class="tab-button active">File Tree</button>
+    <button id="tabXmlInput" class="tab-button">XML Input</button>
   </div>
   
-  <!-- XML Input Tab -->
-  <div id="xmlInputTab" class="tab-content active">
+  <!-- File Tree Tab (Now First) -->
+  <div id="fileTreeTab" class="tab-content active">
+    <h2 class="title">Step 1: Select Files</h2>
+    <p class="description">
+      Select the files that you want your AI to understand. These will be copied as an XML structure that you can send to your LLM.
+      Note: Files from .gitignore are excluded.
+    </p>
+    <div class="select-all-container">
+      <button id="toggleSelectAll" class="select-all-button">Deselect All</button>
+    </div>
+    <div id="fileTreeList"></div>
+    <textarea id="instructions" placeholder="Enter additional instructions for your AI..."></textarea>
+    <div class="token-counter">
+      <span id="tokenCount">0</span> estimated tokens
+    </div>
+    <div class="button-container">
+      <button id="copyOutput">Copy XML Output</button>
+    </div>
+    <p class="description" style="margin-top: 10px; font-style: italic;">
+      After copying, paste the XML to your LLM along with your instructions and ask for code changes.
+      Then copy the response and go to the XML Input tab.
+    </p>
+  </div>
+  
+  <!-- XML Input Tab (Now Second) -->
+  <div id="xmlInputTab" class="tab-content">
     <div id="inputSection" class="collapsible-section expanded">
-      <h2>Paste your XML</h2>
+      <h2 class="title">Step 2: Apply AI Changes</h2>
       <p class="description">
-        These should be the XML changes that are the output from the LLM that you're using.
-        Formatted like <a href="https://github.com/Timvdv/xml-to-code/blob/main/inputPrompt.txt" target="_blank">this</a>
+        Paste the XML response from your LLM here. This should be the XML code changes that the LLM generated.
       </p>
-      <textarea id="xmlInput" placeholder="Enter XML here..."></textarea>
+      <textarea id="xmlInput" placeholder="Paste the XML response from your AI here..."></textarea>
       <div class="button-container">
         <button id="prepareChanges">Prepare Changes</button>
       </div>
@@ -361,24 +394,10 @@
     </div>
   </div>
   
-  <!-- File Tree Tab -->
-  <div id="fileTreeTab" class="tab-content">
-    <h2>File Tree Overview</h2>
-    <p class="description">Select files to include in the copied XML output and add any additional instructions below.</p>
-    <div class="select-all-container">
-      <button id="toggleSelectAll" class="select-all-button">Select All</button>
-    </div>
-    <div id="fileTreeList"></div>
-    <textarea id="instructions" placeholder="Enter additional instructions to include..."></textarea>
-    <div class="button-container">
-      <button id="copyOutput">Copy XML Output</button>
-    </div>
-  </div>
-  
   <footer>
-    Extension is made with ❤️ by Tim van de Vathorst -
-    <a href="https://github.com/Timvdv/xml-to-code" target="_blank">View on GitHub</a> |
-    <a href="https://www.paypal.me/timvandevathorst" target="_blank">Support this Project</a>
+    Made with ❤️ by Tim van de Vathorst -
+    <a href="https://github.com/Timvdv/xml-to-code" target="_blank" class="footer-button">View on GitHub</a> |
+    <a href="https://www.paypal.me/timvandevathorst" target="_blank" class="footer-button">Support this Project</a>
   </footer>
   
   <!-- Include external JS file -->

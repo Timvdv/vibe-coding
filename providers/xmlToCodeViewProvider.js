@@ -23,7 +23,7 @@ const {
 class XmlToCodeViewProvider {
   constructor(context) {
     this.context = context;
-    this.viewId = "xmlToCodeView";
+    this.viewId = "vibeCodingView";
     this.pendingChanges = [];
   }
 
@@ -63,7 +63,7 @@ class XmlToCodeViewProvider {
           break;
         case "previewChanges":
           try {
-            await vscode.commands.executeCommand("xmlToCode.previewChanges");
+            await vscode.commands.executeCommand("vibeCoding.previewChanges");
           } catch (err) {
             vscode.window.showErrorMessage("Error previewing changes: " + err.message);
           }
@@ -78,14 +78,17 @@ class XmlToCodeViewProvider {
           break;
         case "cancelChanges":
           this.pendingChanges = [];
-          webviewView.webview.postMessage({ command: "clearChanges" });
+          webviewView.webview.postMessage({ command: "cancelChanges" });
           break;
         case "getFileTree":
           try {
-            const fileTree = await this.getWorkspaceFileTree();
+            const { tree, biggestFiles } = await this.getWorkspaceFileTree();
             webviewView.webview.postMessage({
               command: "displayFileTree",
-              payload: fileTree
+              payload: {
+                tree,
+                biggestFiles
+              }
             });
           } catch (err) {
             vscode.window.showErrorMessage("Error getting file tree: " + err.message);
@@ -157,18 +160,49 @@ class XmlToCodeViewProvider {
       return;
     }
 
-    // Convert triple-equals blocks and wrap with a root element
+    // Convert triple-equals blocks to CDATA
     let processedXml = convertTripleEqualsToCdata(xmlInput);
-    processedXml = `<changes>${processedXml}</changes>`;
-    console.log("Processed XML after wrapping:", processedXml);
+    
+    // Check if the XML already has a <changes> root element
+    const hasChangesRoot = /<\s*changes\b[^>]*>/.test(processedXml.trim());
+    
+    if (!hasChangesRoot) {
+      // More robust check for any root element
+      const hasRootTag = /<\s*[\w-]+[^>]*>/.test(processedXml.trim());
+      
+      if (!hasRootTag) {
+        // Only wrap with <changes> if there's no root element
+        processedXml = `<changes>${processedXml}</changes>`;
+        console.log("Added <changes> wrapper to XML input");
+      } else {
+        // Check specifically for <file> at the root level without a wrapper
+        const startsWithFileTag = /^\s*<\s*file\b/.test(processedXml.trim());
+        if (startsWithFileTag) {
+          processedXml = `<changes>${processedXml}</changes>`;
+          console.log("Added <changes> wrapper to XML with root <file> tags");
+        } else {
+          console.log("Using XML input with existing root element");
+        }
+      }
+    } else {
+      console.log("XML already has <changes> root element");
+    }
+    
+    console.log("Processed XML after wrapping:", processedXml.substring(0, 200) + "...");
 
     let xmlDoc;
     try {
       const parser = new DOMParser({
         errorHandler: {
-          warning: () => {},
-          error: () => {},
-          fatalError: () => {},
+          warning: (msg) => {
+            console.warn("XML Parser Warning:", msg);
+          },
+          error: (msg) => {
+            console.error("XML Parser Error:", msg);
+          },
+          fatalError: (msg) => {
+            console.error("XML Parser Fatal Error:", msg);
+          },
         },
       });
       xmlDoc = parser.parseFromString(processedXml, "text/xml");
@@ -191,16 +225,24 @@ class XmlToCodeViewProvider {
 
     if (!fileNodes || fileNodes.length === 0) {
       vscode.window.showWarningMessage("No <file> nodes found in XML.");
+      return;
     }
 
     for (let i = 0; i < fileNodes.length; i++) {
       const fileNode = fileNodes.item(i);
       let filePath = fileNode.getAttribute("path");
       let action = fileNode.getAttribute("action");
-      if (!filePath || !action) continue;
+      
+      console.log(`Processing file node ${i+1}/${fileNodes.length}: path=${filePath}, action=${action}`);
+      
+      if (!filePath || !action) {
+        console.log(`Skipping file node ${i+1} due to missing path or action`);
+        continue;
+      }
 
       filePath = normalizeFilePath(filePath);
       const changeNodes = fileNode.getElementsByTagName("change");
+      console.log(`Found ${changeNodes.length} change nodes for file ${filePath}`);
 
       if (action === "delete") {
         const beforeContent = await this.getBeforeContent(filePath);
@@ -211,7 +253,24 @@ class XmlToCodeViewProvider {
           before: beforeContent,
           after: "",
         });
+        console.log(`Added delete action for ${filePath}`);
       } else {
+        if (changeNodes.length === 0) {
+          // Handle files with no change nodes but with create/rewrite action
+          if (action === "create" || action === "rewrite") {
+            const beforeContent = action === "rewrite" ? await getFileContent(filePath) : "";
+            this.pendingChanges.push({
+              filePath,
+              action,
+              description: `${action === "create" ? "Create" : "Rewrite"} file ${filePath}`,
+              before: beforeContent,
+              after: "",  // Empty content
+            });
+            console.log(`Added ${action} action for ${filePath} with no content`);
+          }
+          continue;
+        }
+        
         for (let j = 0; j < changeNodes.length; j++) {
           const changeNode = changeNodes.item(j);
           const descNodes = changeNode.getElementsByTagName("description");
@@ -220,8 +279,22 @@ class XmlToCodeViewProvider {
             description = descNodes.item(0).textContent.trim();
           }
           const contentNodes = changeNode.getElementsByTagName("content");
-          if (!contentNodes || !contentNodes.length) continue;
-          let rawCode = contentNodes.item(0).textContent.trim();
+          
+          console.log(`Processing change ${j+1} for ${filePath}, description: "${description}"`);
+          console.log(`Content nodes found: ${contentNodes ? contentNodes.length : 0}`);
+          
+          if (!contentNodes || !contentNodes.length) {
+            console.log(`No content nodes found for change ${j+1}, skipping`);
+            continue;
+          }
+          
+          let rawCode = contentNodes.item(0).textContent;
+          if (rawCode) {
+            rawCode = rawCode.trim();
+            console.log(`Extracted content of length: ${rawCode.length} chars`);
+          } else {
+            console.log(`Warning: Empty content extracted for change ${j+1}`);
+          }
 
           if (action === "rewrite" && !rawCode) {
             const beforeContent = await this.getBeforeContent(filePath);
@@ -232,26 +305,34 @@ class XmlToCodeViewProvider {
               before: beforeContent,
               after: "",
             });
+            console.log(`Added delete action for ${filePath} due to empty rewrite content`);
             continue;
           }
 
           if (action === "create" || action === "rewrite") {
+            const beforeContent = action === "rewrite" ? await getFileContent(filePath) : "";
             this.pendingChanges.push({
               filePath,
               action,
-              description,
-              before: action === "rewrite" ? await getFileContent(filePath) : "",
+              description: description || `${action === "create" ? "Create" : "Rewrite"} file ${filePath}`,
+              before: beforeContent,
               after: rawCode,
             });
+            console.log(`Added ${action} action for ${filePath}, content length: ${rawCode.length}`);
+          } else {
+            console.log(`Unrecognized action "${action}" for file ${filePath}`);
           }
         }
       }
     }
 
     if (this.pendingChanges.length === 0) {
-      vscode.window.showWarningMessage("No valid changes were parsed from the XML.");
+      console.log("Warning: No valid changes were parsed from the XML. Raw XML length:", xmlInput.length);
+      console.log("XML preview (first 100 chars):", xmlInput.substring(0, 100));
+      vscode.window.showWarningMessage("No valid changes were parsed from the XML. Check the developer console for details.");
       return;
     }
+    console.log(`Successfully prepared ${this.pendingChanges.length} changes from XML input`);
     vscode.window.showInformationMessage("XML modifications prepared. Please review the changes.");
   }
 
@@ -349,6 +430,19 @@ class XmlToCodeViewProvider {
       return [];
     }
     
+    // Load and parse .gitignore file if it exists
+    const ignore = require('ignore');
+    const ig = ignore();
+    
+    try {
+      const gitignorePath = vscode.Uri.joinPath(workspaceUri, '.gitignore');
+      const gitignoreContent = await getFileContentFromUri(gitignorePath);
+      ig.add(gitignoreContent);
+    } catch (err) {
+      // .gitignore file doesn't exist or can't be read, continue without it
+      console.log('No .gitignore file found or unable to read it:', err.message);
+    }
+    
     try {
       // Get all files in the workspace
       const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
@@ -356,63 +450,82 @@ class XmlToCodeViewProvider {
       // Create a directory structure
       const fileTree = [];
       const directoryMap = {};
+      const biggestFiles = []; // Array to track the biggest files
       
       // Process each file and organize into directory structure
-      files.forEach(file => {
+      for (const file of files) {
+        // Skip files that match gitignore patterns
         const relativePath = vscode.workspace.asRelativePath(file);
-        const pathParts = relativePath.split('/');
-        const fileName = pathParts.pop();
-        const isDirectory = false; // This is a file, not a directory
-        
-        // Create the file object
-        const fileObj = {
-          path: relativePath,
-          name: fileName,
-          isDirectory,
-          selected: true, // Set all files to be selected by default
-          expanded: false // Not applicable for files
-        };
-        
-        // If it's a top-level file, add it directly to the file tree
-        if (pathParts.length === 0) {
-          fileTree.push(fileObj);
-          return;
+        if (ig.ignores(relativePath)) {
+          console.log(`Skipping ignored file: ${relativePath}`);
+          continue;
         }
         
-        // Create directory structure
-        let currentPath = '';
-        let currentArray = fileTree;
-        
-        for (let i = 0; i < pathParts.length; i++) {
-          const part = pathParts[i];
-          currentPath = currentPath ? `${currentPath}/${part}` : part;
+        // Get file size
+        try {
+          const stat = await vscode.workspace.fs.stat(file);
+          const fileSize = stat.size;
           
-          // Check if directory already exists in the current level
-          let dirObj = directoryMap[currentPath];
+          const pathParts = relativePath.split('/');
+          const fileName = pathParts.pop();
+          const isDirectory = false; // This is a file, not a directory
           
-          if (!dirObj) {
-            // Create new directory object
-            dirObj = {
-              path: currentPath,
-              name: part,
-              isDirectory: true,
-              children: [],
-              expanded: false, // Directories start collapsed
-              selected: true // Directories are selected by default
-            };
-            
-            // Add to the current level and update the map
-            currentArray.push(dirObj);
-            directoryMap[currentPath] = dirObj;
+          // Create the file object
+          const fileObj = {
+            path: relativePath,
+            name: fileName,
+            isDirectory,
+            selected: true, // Set all files to be selected by default
+            expanded: false, // Not applicable for files
+            size: fileSize // Add size property
+          };
+          
+          // Track for biggest files list
+          biggestFiles.push(fileObj);
+          
+          // If it's a top-level file, add it directly to the file tree
+          if (pathParts.length === 0) {
+            fileTree.push(fileObj);
+            continue;
           }
           
-          // Update current array to the children of this directory
-          currentArray = dirObj.children;
+          // Create directory structure
+          let currentPath = '';
+          let currentArray = fileTree;
+          
+          for (let i = 0; i < pathParts.length; i++) {
+            const part = pathParts[i];
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            
+            // Check if directory already exists in the current level
+            let dirObj = directoryMap[currentPath];
+            
+            if (!dirObj) {
+              // Create new directory object
+              dirObj = {
+                path: currentPath,
+                name: part,
+                isDirectory: true,
+                children: [],
+                expanded: false, // Directories start collapsed
+                selected: true // Directories are selected by default
+              };
+              
+              // Add to the current level and update the map
+              currentArray.push(dirObj);
+              directoryMap[currentPath] = dirObj;
+            }
+            
+            // Update current array to the children of this directory
+            currentArray = dirObj.children;
+          }
+          
+          // Add the file to the final directory's children
+          currentArray.push(fileObj);
+        } catch (error) {
+          console.log(`Error getting size for file ${relativePath}:`, error);
         }
-        
-        // Add the file to the final directory's children
-        currentArray.push(fileObj);
-      });
+      }
       
       // Sort the file tree
       const sortTree = (items) => {
@@ -433,10 +546,19 @@ class XmlToCodeViewProvider {
         return items;
       };
       
-      return sortTree(fileTree);
+      // Sort biggest files by size
+      biggestFiles.sort((a, b) => b.size - a.size);
+      
+      // Take top 10 files
+      const top10Files = biggestFiles.slice(0, 10);
+      
+      return {
+        tree: sortTree(fileTree),
+        biggestFiles: top10Files
+      };
     } catch (err) {
       vscode.window.showErrorMessage(`Failed to get file tree: ${err.message}`);
-      return [];
+      return { tree: [], biggestFiles: [] };
     }
   }
   
@@ -448,23 +570,40 @@ class XmlToCodeViewProvider {
     if (!workspaceUri) return;
     
     try {
-      // Use the selectedFiles passed directly from the webview
-      // No need to request them separately anymore
-      
       // Show loading state and disable button during processing
       this._view.webview.postMessage({ command: "processingStarted" });
       
-      // Get all files in the workspace
-      const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+      // Load and parse .gitignore file if it exists
+      const ignore = require('ignore');
+      const ig = ignore();
       
-      // Filter files based on selection
-      // With the new directory structure, selectedFiles will contain both files and directories
-      // We need to extract just the file paths from the selection
+      try {
+        const gitignorePath = vscode.Uri.joinPath(workspaceUri, '.gitignore');
+        const gitignoreContent = await getFileContentFromUri(gitignorePath);
+        ig.add(gitignoreContent);
+      } catch (err) {
+        // .gitignore file doesn't exist or can't be read, continue without it
+        console.log('No .gitignore file found or unable to read it:', err.message);
+      }
+      
+      // Get all files in the workspace
+      const allFiles = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 10000);
+      
+      // Filter out gitignored files
+      const filteredFiles = allFiles.filter(file => {
+        const relativePath = vscode.workspace.asRelativePath(file);
+        if (ig.ignores(relativePath)) {
+          console.log(`Skipping ignored file in XML output: ${relativePath}`);
+          return false;
+        }
+        return true;
+      });
+      
+      // Filter files based on selection (for XML content only, not file map)
       const selectedFilePaths = selectedFiles
-        .filter(item => !item.isDirectory) // Only include files, not directories
+        .filter(item => !item.isDirectory)
         .map(item => item.path);
       
-      // If directories are selected, we need to include all files within those directories
       const selectedDirPaths = selectedFiles
         .filter(item => item.isDirectory)
         .map(item => item.path);
@@ -481,8 +620,68 @@ class XmlToCodeViewProvider {
         '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
       ];
       
+      // Generate file tree structure for the file map - files that aren't ignored
+      const fileMapTree = {};
+      const workspaceName = path.basename(workspaceUri.fsPath);
+      
+      // Build file tree structure for filtered files (for file map only)
+      filteredFiles.forEach(file => {
+        // Skip binary files from file map
+        const relativePath = vscode.workspace.asRelativePath(file);
+        if (binaryFileExtensions.some(ext => relativePath.endsWith(ext))) {
+          return; // Skip binary files in file map
+        }
+        
+        const pathParts = relativePath.split('/');
+        
+        let currentLevel = fileMapTree;
+        for (let i = 0; i < pathParts.length; i++) {
+          const part = pathParts[i];
+          const isFile = i === pathParts.length - 1;
+          
+          if (isFile) {
+            currentLevel[part] = null; // Files are represented as null (leaf nodes)
+          } else {
+            if (!currentLevel[part]) {
+              currentLevel[part] = {}; // Create new directory
+            }
+            currentLevel = currentLevel[part]; // Go deeper into the directory
+          }
+        }
+      });
+      
+      // Function to generate ASCII file map representation using simple ASCII characters
+      function generateFileMap(tree, prefix = '', isLast = true) {
+        let result = '';
+        const entries = Object.entries(tree);
+        
+        entries.forEach(([key, value], index) => {
+          const isLastItem = index === entries.length - 1;
+          // Use simple ASCII characters that work in all environments
+          const line = `${prefix}${isLastItem ? '`-- ' : '|-- '}${key}\n`;
+          result += line;
+          
+          if (value !== null) {
+            const newPrefix = prefix + (isLastItem ? '    ' : '|   ');
+            result += generateFileMap(value, newPrefix, isLastItem);
+          }
+        });
+        
+        return result;
+      }
+      
+      // Generate the file map string
+      let fileMapString = `${workspaceName}\n`;
+      fileMapString += generateFileMap(fileMapTree);
+      
+      // Initialize XML string with file map at the top
+      let xml = '<changes>\n<file_map>\n';
+      xml += fileMapString;
+      xml += '</file_map>\n\n';
+      
+      // Filter the files for content inclusion based on selection
       const filesToInclude = (selectedFilePaths.length > 0 || selectedDirPaths.length > 0 ?
-        files.filter(file => {
+        filteredFiles.filter(file => {
           const relativePath = vscode.workspace.asRelativePath(file);
           
           // Skip binary files
@@ -498,14 +697,9 @@ class XmlToCodeViewProvider {
           
           // Include if the file is in a selected directory
           for (const dirPath of selectedDirPaths) {
-            // Ensure we're matching a directory by checking if the relative path
-            // starts with the directory path followed by a slash
-            // or if it exactly matches the directory path (for files directly in the directory)
             if (relativePath === dirPath || 
                 relativePath.startsWith(dirPath + '/') || 
-                // Handle case where directory doesn't end with slash
                 (dirPath.indexOf('/') !== -1 && relativePath.startsWith(dirPath))) {
-              // Skip binary files even if they're in selected directories
               if (!binaryFileExtensions.some(ext => relativePath.endsWith(ext))) {
                 console.log(`Including file ${relativePath} from directory ${dirPath}`);
                 return true;
@@ -515,25 +709,19 @@ class XmlToCodeViewProvider {
           
           return false;
         }) :
-        files.filter(file => {
+        filteredFiles.filter(file => {
           const relativePath = vscode.workspace.asRelativePath(file);
           return !binaryFileExtensions.some(ext => relativePath.endsWith(ext));
-        })); // If no selection, include all non-binary files
+        }));
         
-      console.log(`Total files to include (after filtering): ${filesToInclude.length}`);
-      
-      // Initialize XML string
-      let xml = '<changes>\n';
+      console.log(`Total files to include in XML content (after filtering): ${filesToInclude.length}`);
       
       // Set a maximum file size to include (5MB)
       const MAX_FILE_SIZE = 5 * 1024 * 1024;
-      // Set a maximum XML size for clipboard (10MB)
-      const MAX_XML_SIZE = 10 * 1024 * 1024;
       
       // Batch process files in chunks of 50
       const batchSize = 50;
       const totalFiles = filesToInclude.length;
-      let totalXmlSize = 0;
       let skippedFiles = 0;
       
       // Process files in batches with progress updates
@@ -554,14 +742,6 @@ class XmlToCodeViewProvider {
             const content = await getFileContentFromUri(file);
             const fileXml = `  <file path="${relativePath}" action="rewrite">\n    <change>\n      <description>File content</description>\n      <content>===\n${content}\n===</content>\n    </change>\n  </file>\n`;
             
-            // Check if adding this file would exceed the maximum XML size
-            if (totalXmlSize + fileXml.length > MAX_XML_SIZE) {
-              console.log(`XML size limit reached, skipping file: ${relativePath}`);
-              skippedFiles++;
-              return `  <!-- Skipped file to keep XML size manageable: ${relativePath} -->\n`;
-            }
-            
-            totalXmlSize += fileXml.length;
             return fileXml;
           } catch (err) {
             console.error(`Error processing file ${file.fsPath}:`, err);
@@ -584,7 +764,7 @@ class XmlToCodeViewProvider {
       xml += `## Final Notes
 1.  **rewrite**  For rewriting an entire file, place all new content in \`<content>\`. No partial modifications are possible here. Avoid all use of placeholders.
 2. You can always **create** new files and **delete** existing files. Provide full code for create, and empty content for delete. Avoid creating files you know exist already.
-3. If a file tree is provided, place your files logically within that structure. Respect the user’s relative or absolute paths.
+3. If a file tree is provided, place your files logically within that structure. Respect the user's relative or absolute paths.
 4. Wrap your final output in \`\`\`XML ... \`\`\` for clarity.
 5. **Important:** Do not wrap any XML output in CDATA tags (i.e. \`<![CDATA[ ... ]]>\`). Repo Prompt expects raw XML exactly as shown in the examples.
 6. The final output must apply cleanly with no leftover syntax errors.
@@ -597,12 +777,58 @@ class XmlToCodeViewProvider {
       
       xml += `</changes>`;
       
-      await vscode.env.clipboard.writeText(xml);
-      this._view.webview.postMessage({ command: "processingComplete" });
-      vscode.window.showInformationMessage(`Copied ${filesToInclude.length} files to clipboard`);
-      console.log(`Copied ${filesToInclude.length} files to clipboard`);
+      // Write XML to a temporary file
+      const tempDir = path.join(os.tmpdir(), 'xml-to-code');
+      fs.mkdirSync(tempDir, { recursive: true });
+      const tempFile = path.join(tempDir, `clipboard-${Date.now()}.xml`);
+      fs.writeFileSync(tempFile, xml, 'utf8');
+      
+      // Use native clipboard command based on OS
+      let clipboardCommand;
+      if (process.platform === 'darwin') {
+        // macOS
+        clipboardCommand = `cat "${tempFile}" | pbcopy`;
+      } else if (process.platform === 'win32') {
+        // Windows
+        clipboardCommand = `type "${tempFile}" | clip`;
+      } else {
+        // Linux (requires xclip)
+        clipboardCommand = `cat "${tempFile}" | xclip -selection clipboard`;
+      }
+      
+      const { exec } = require('child_process');
+      exec(clipboardCommand, (error) => {
+        if (error) {
+          console.error('Error using native clipboard:', error);
+          // Fall back to VSCode clipboard for smaller content
+          if (xml.length < 100000) {
+            vscode.env.clipboard.writeText(xml).then(() => {
+              this._view.webview.postMessage({ command: "processingComplete" });
+              vscode.window.showInformationMessage(`Copied ${filesToInclude.length} files to clipboard`);
+            });
+          } else {
+            this._view.webview.postMessage({ command: "processingComplete" });
+            vscode.window.showErrorMessage(`Failed to copy to clipboard. XML content saved to ${tempFile}`);
+          }
+        } else {
+          this._view.webview.postMessage({ command: "processingComplete" });
+          vscode.window.showInformationMessage(`Copied ${filesToInclude.length} files to clipboard (using native clipboard)`);
+          console.log(`Copied ${filesToInclude.length} files to clipboard using native clipboard command`);
+          
+          // Clean up temp file after a delay
+          setTimeout(() => {
+            try {
+              fs.unlinkSync(tempFile);
+            } catch (e) {
+              console.error('Error cleaning up temp file:', e);
+            }
+          }, 5000);
+        }
+      });
+      
     } catch (err) {
       vscode.window.showErrorMessage(`Failed to copy file tree as XML: ${err.message}`);
+      this._view.webview.postMessage({ command: "processingComplete" });
     }
   }
 }

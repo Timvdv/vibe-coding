@@ -35,6 +35,11 @@
     // Ensure "Apply Changes" button is hidden on initial load
     fixedButtonContainer.style.display = 'none';
 
+    // Initialize - request file tree data on load since it's now the default tab
+    vscode.postMessage({
+        command: 'getFileTree'
+    });
+
     // When user clicks "Prepare Changes"
     prepareChangesButton.addEventListener('click', () => {
         const xml = xmlInput.value.trim();
@@ -66,12 +71,9 @@
     });
 
     cancelChangesButton.addEventListener('click', () => {
-        const confirmCancel = confirm("Are you sure you want to cancel? All changes will be deleted.");
-        if (confirmCancel) {
-            vscode.postMessage({
-                command: 'cancelChanges'
-            });
-        }
+        vscode.postMessage({
+            command: 'cancelChanges'
+        });
     });
 
     // Toggle button to show/hide the XML input area
@@ -112,12 +114,42 @@
         });
     });
     
-    // Copy Output button functionality
-    copyOutputButton.addEventListener('click', async () => {
+    // Token counter functionality
+    function updateTokenCount(text) {
+        // More accurate token estimation for GPT models
+        // These models use ~4 characters per token on average in English text
+        const charsPerToken = 4;
+        const rawChars = text.length;
+        const estimatedTokens = Math.ceil(rawChars / charsPerToken);
+        
+        // Format large token counts with K suffix
+        const formattedCount = estimatedTokens > 1000 ? 
+            `${(estimatedTokens / 1000).toFixed(1)}K` : 
+            estimatedTokens.toString();
+            
+        document.getElementById('tokenCount').textContent = formattedCount;
+    }
+
+    // Monitor XML input for token counting
+    xmlInput.addEventListener('input', (e) => {
+        updateTokenCount(e.target.value);
+    });
+
+    // Cache for file token counts
+    window.fileTokenCache = window.fileTokenCache || {};
+    
+    // Function to update token count based on selected files
+    function updateFileTreeTokenCount() {
         const instructions = document.getElementById('instructions').value;
         const selectedItems = [];
         
-        console.log('Starting selected items collection');
+        // Calculate total characters for all selected items
+        let totalChars = instructions ? instructions.length : 0;
+        
+        // For file content, use a much higher estimate since actual content will be large
+        // Most source code files average 100-500 tokens
+        const averageFileTokens = 200;
+        let estimatedContentTokens = 0;
         
         // Collect all checked checkboxes
         const checkedBoxes = document.querySelectorAll('#fileTreeList input[type="checkbox"]:checked');
@@ -130,17 +162,51 @@
                 const listItem = itemContainer.closest('li');
                 const isDirectory = listItem && listItem.classList.contains('directory-item');
                 
-                console.log('Processing checked item:', path);
                 if (path) {
                     selectedItems.push({
                         path: path,
                         isDirectory: isDirectory,
                         checked: checkbox.checked
                     });
+                    
+                    // Add path characters to total
+                    totalChars += path.length;
+                    
+                    // For each selected file, add an estimate of its content length
+                    if (!isDirectory) {
+                        estimatedContentTokens += averageFileTokens;
+                    }
                 }
             }
         });
+
+        // Estimate tokens from characters plus estimated content tokens
+        const charsPerToken = 4;
+        const estimatedPathTokens = Math.ceil(totalChars / charsPerToken);
+        const estimatedTokens = estimatedPathTokens + estimatedContentTokens;
+        
+        // Format large token counts with K suffix
+        let formattedCount;
+        if (estimatedTokens >= 1000) {
+            formattedCount = `${(estimatedTokens / 1000).toFixed(1)}K`;
+        } else {
+            formattedCount = estimatedTokens.toString();
+        }
+            
+        document.getElementById('tokenCount').textContent = formattedCount;
+        console.log('Estimated tokens:', estimatedTokens, 'Formatted as:', formattedCount);
+        
+        return selectedItems;
+    }
     
+    // Add instructor textarea change listener for token counting
+    instructionsTextarea.addEventListener('input', updateFileTreeTokenCount);
+    
+    // Copy Output button functionality
+    copyOutputButton.addEventListener('click', async () => {
+        const instructions = document.getElementById('instructions').value;
+        const selectedItems = updateFileTreeTokenCount();
+        
         console.log('Collected selected items:', selectedItems);
         
         vscode.postMessage({
@@ -189,18 +255,39 @@
                 break;
 
             case 'clearChanges':
+                console.log("Received clearChanges command from extension");
                 clearChanges();
                 fixedButtonContainer.style.display = 'none';
+                
+                // Also reset the UI
+                inputSection.classList.remove('collapsed');
+                inputSection.classList.add('expanded');
+                inputCollapsed = false;
+                toggleInputBtn.style.display = 'none';
+                tabXmlInput.click();
+                successMessage.style.display = 'none';
                 break;
 
             case 'cancelChanges':
+                console.log("Received cancelChanges command from extension");
                 clearChanges();
                 fixedButtonContainer.style.display = 'none';
+                
+                // Make sure to show the XML input section again
                 inputSection.classList.remove('collapsed');
                 inputSection.classList.add('expanded');
+                inputCollapsed = false;
+                
+                // Hide the toggle button
                 toggleInputBtn.style.display = 'none';
-                xmlInput.value = "";
+                
+                // Show the XML tab if we're in file tree view
+                tabXmlInput.click();
+                
+                // Hide success message if it's visible
                 successMessage.style.display = 'none';
+                
+                console.log("UI reset to initial state after cancel");
                 break;
                 
             case 'displayFileTree':
@@ -277,7 +364,7 @@
             checkbox.className = 'change-checkbox';
             checkbox.checked = true;
             checkbox.addEventListener('click', (evt) => {
-                evt.stopPropagation(); // don’t open diff
+                evt.stopPropagation(); // don't open diff
                 globalChanges[index].selected = evt.target.checked;
             });
 
@@ -313,10 +400,10 @@
     toggleSelectAllButton.addEventListener('click', () => {
         // Determine current state (if any items are selected)
         const allCheckboxes = document.querySelectorAll('#fileTreeList input[type="checkbox"]');
-        const anySelected = Array.from(allCheckboxes).some(checkbox => checkbox.checked);
+        const allSelected = Array.from(allCheckboxes).every(checkbox => checkbox.checked);
         
         // Toggle all checkboxes to the opposite state
-        const newState = !anySelected;
+        const newState = !allSelected;
         allCheckboxes.forEach(checkbox => {
             checkbox.checked = newState;
             
@@ -332,12 +419,19 @@
         
         // Update button text
         toggleSelectAllButton.textContent = newState ? 'Deselect All' : 'Select All';
+        
+        // Update token count after toggling all checkboxes
+        updateFileTreeTokenCount();
     });
 
     // Display file tree in the UI
-    function displayFileTree(files) {
+    function displayFileTree(data) {
         fileTreeList.innerHTML = ''; // Clear previous file tree
         
+        // Handle the new data structure
+        const files = data.tree || [];
+        const biggestFiles = data.biggestFiles || [];
+
         if (!files || files.length === 0) {
             fileTreeList.textContent = "No files to display.";
             return;
@@ -346,14 +440,14 @@
         // Store file selection state globally
         window.fileTreeSelection = window.fileTreeSelection || {};
         
-        // Create the root list
+        // Create the root list for the file tree
         const rootList = document.createElement('ul');
         rootList.className = 'file-list';
         fileTreeList.appendChild(rootList);
         
         // Reset the Select All button text based on initial selection state
         if (toggleSelectAllButton) {
-            toggleSelectAllButton.textContent = 'Select All';
+            toggleSelectAllButton.textContent = 'Deselect All';
         }
         
         // Recursive function to render the file tree
@@ -451,6 +545,9 @@
                             }
                         }
                     }
+                    
+                    // Update token count whenever a checkbox is checked/unchecked
+                    updateFileTreeTokenCount();
                 });
                 itemContainer.appendChild(checkbox);
                 
@@ -482,6 +579,9 @@
                         checkbox.checked = !checkbox.checked;
                         item.selected = checkbox.checked;
                         window.fileTreeSelection[item.path] = checkbox.checked;
+                        
+                        // Update token count when file selection is changed by clicking the item
+                        updateFileTreeTokenCount();
                     }
                 });
                 
@@ -512,5 +612,96 @@
         
         // Start rendering from the root
         renderTree(files, rootList);
+        
+        // Add the Biggest Files section if we have any
+        if (biggestFiles && biggestFiles.length > 0) {
+            // Create a separator
+            const separator = document.createElement('div');
+            separator.className = 'tree-separator';
+            separator.textContent = 'Biggest Files';
+            fileTreeList.appendChild(separator);
+            
+            // Create a list for biggest files
+            const bigFilesList = document.createElement('ul');
+            bigFilesList.className = 'file-list biggest-files-list';
+            fileTreeList.appendChild(bigFilesList);
+            
+            // Format file size as readable string (KB, MB, etc)
+            const formatFileSize = (bytes) => {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            };
+            
+            // Add each big file to the list
+            biggestFiles.forEach((file) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'file-item';
+                
+                // Create the item container
+                const itemContainer = document.createElement('div');
+                itemContainer.className = 'item-container';
+                
+                // Item path element
+                const itemText = document.createElement('div');
+                itemText.className = 'file-path';
+                itemText.textContent = `${formatFileSize(file.size)} - ${file.name}`;
+                itemContainer.appendChild(itemText);
+                
+                // Add the full path in a smaller font below
+                const fullPathText = document.createElement('div');
+                fullPathText.className = 'file-full-path';
+                fullPathText.textContent = file.path;
+                itemContainer.appendChild(fullPathText);
+                
+                // Checkbox for selection
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'change-checkbox';
+                checkbox.checked = window.fileTreeSelection[file.path] !== undefined ? 
+                    window.fileTreeSelection[file.path] : file.selected;
+                
+                // Save the initial selection state
+                window.fileTreeSelection[file.path] = checkbox.checked;
+                
+                checkbox.addEventListener('click', (evt) => {
+                    evt.stopPropagation(); // don't trigger the listItem click
+                    
+                    // Update selection state
+                    file.selected = evt.target.checked;
+                    window.fileTreeSelection[file.path] = evt.target.checked;
+                    
+                    // Update token count
+                    updateFileTreeTokenCount();
+                });
+                itemContainer.appendChild(checkbox);
+                
+                // Set a data attribute for easier selection
+                itemContainer.setAttribute('data-path', file.path);
+                listItem.appendChild(itemContainer);
+                
+                // Make the item container clickable (except for checkbox)
+                itemContainer.addEventListener('click', (evt) => {
+                    if (evt.target === checkbox) {
+                        return; // ignore clicks on the checkbox
+                    }
+                    
+                    // Toggle selection
+                    checkbox.checked = !checkbox.checked;
+                    file.selected = checkbox.checked;
+                    window.fileTreeSelection[file.path] = checkbox.checked;
+                    
+                    // Update token count
+                    updateFileTreeTokenCount();
+                });
+                
+                bigFilesList.appendChild(listItem);
+            });
+        }
+        
+        // Calculate initial token count after rendering the tree
+        updateFileTreeTokenCount();
     }
 })();
