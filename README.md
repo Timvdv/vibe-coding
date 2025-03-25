@@ -128,8 +128,7 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 
 Made to use together with:
 
-- [RepoPrompt](https://repoprompt.com)\
-  Use the **XML Whole** prompt for best results.
+- Use the **XML Whole** prompt for best results.
 
 Extension is made with ❤️ by Tim van de Vathorst\
 [GitHub](https://github.com/Timvdv/xml-to-code) | [Donate](https://www.paypal.me/timvandevathorst)
