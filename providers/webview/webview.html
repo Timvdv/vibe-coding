@@ -354,6 +354,8 @@
       <button id="toggleSelectAll" class="select-all-button">Deselect All</button>
     </div>
     <div id="fileTreeList"></div>
+    
+    <h2 class="title">Step 2: Add Instructions</h2>
     <textarea id="instructions" placeholder="Enter additional instructions for your AI..."></textarea>
     <div class="token-counter">
       <span id="tokenCount">0</span> estimated tokens
@@ -362,8 +364,7 @@
       <button id="copyOutput">Copy XML Output</button>
     </div>
     <p class="description" style="margin-top: 10px; font-style: italic;">
-      After copying, paste the XML to your LLM along with your instructions and ask for code changes.
-      Then copy the response and go to the XML Input tab.
+      After copying, paste the XML output to your LLM. Then copy the response and go to <a href="#" id="xmlInputTabLink" style="cursor: pointer; color: #ffffff">XML Input tab</a>.
     </p>
   </div>
   
@@ -402,5 +403,13 @@
   
   <!-- Include external JS file -->
   <script src="${webviewJsUri}" nonce="${nonce}"></script>
+  <script nonce="${nonce}">
+    // Add event listener for the XML Input tab link
+    document.getElementById('xmlInputTabLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      // Simulate a click on the XML Input tab button
+      document.getElementById('tabXmlInput').click();
+    });
+  </script>
 </body>
 </html>

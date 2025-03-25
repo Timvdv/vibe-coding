@@ -768,6 +768,7 @@ class XmlToCodeViewProvider {
 4. Wrap your final output in \`\`\`XML ... \`\`\` for clarity.
 5. **Important:** Do not wrap any XML output in CDATA tags (i.e. \`<![CDATA[ ... ]]>\`). Repo Prompt expects raw XML exactly as shown in the examples.
 6. The final output must apply cleanly with no leftover syntax errors.
+7. Try to not remove any code from the original file, unless it is absolutely necessary.
 </xml_formatting_instructions>`;
 
       // Add instructions if provided (at the bottom of the XML)
